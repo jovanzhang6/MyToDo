@@ -45,10 +45,17 @@ export type Refresh = () => Promise<void>;
 const cur = getCurrentWindow();
 type RzDir = Parameters<typeof cur.startResizeDragging>[0];
 
-// 黑匣子：任何前端错误实时打进 Rust 日志（.tauri-dev.log），同时在窗口 tip 里可见
+// 黑匣子：任何前端错误实时打进 Rust 日志（.tauri-dev.log），同时在窗口 tip 里可见。
+// 带时间戳（区分新旧错误）且 6 秒自动清空（避免残影被当成新错误）。
+let tipTimer: number | undefined;
 function reportError(msg: string): void {
   const tip = document.getElementById("tip");
-  if (tip) tip.textContent = msg;
+  if (tip) {
+    const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+    tip.textContent = `${time} ${msg}`;
+    clearTimeout(tipTimer);
+    tipTimer = window.setTimeout(() => (tip.textContent = ""), 6000);
+  }
   invoke("log_frontend", { msg }).catch(() => {});
 }
 window.addEventListener("error", (e) =>

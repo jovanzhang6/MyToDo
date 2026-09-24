@@ -54,6 +54,7 @@ pub fn run() {
             commands::delete_task,
             commands::set_always_on_top,
             commands::set_opacity,
+            commands::log_frontend,
             commands::hide_window
         ])
         .run(tauri::generate_context!())

@@ -26,6 +26,19 @@ export type Refresh = () => Promise<void>;
 const cur = getCurrentWindow();
 type RzDir = Parameters<typeof cur.startResizeDragging>[0];
 
+// 黑匣子：任何前端错误实时打进 Rust 日志（.tauri-dev.log），同时在窗口 tip 里可见
+function reportError(msg: string): void {
+  const tip = document.getElementById("tip");
+  if (tip) tip.textContent = msg;
+  invoke("log_frontend", { msg }).catch(() => {});
+}
+window.addEventListener("error", (e) =>
+  reportError(`JS错误: ${e.message} @${(e.filename || "").split("/").pop()}:${e.lineno}`)
+);
+window.addEventListener("unhandledrejection", (e) =>
+  reportError(`Promise拒绝: ${String(e.reason)}`)
+);
+
 let state: StateDto | null = null;
 
 export async function refresh(): Promise<void> {

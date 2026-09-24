@@ -152,8 +152,8 @@ body {
 .task-row.done .task-text {
   color: #46586c;
   text-decoration: line-through;
-  text-decoration-thickness: 1.6px;
-  text-decoration-color: #2f3f52;
+  text-decoration-thickness: 2.2px;
+  text-decoration-color: #223247;
 }
 
 .edit-input {
@@ -365,7 +365,7 @@ body {
   min-height: 15px;
 }
 
-/* ── 设置气泡（透明度滑杆） ────────────────────── */
+/* ── 设置气泡（透明度滑杆，声明式 DOM + hidden 切换） ── */
 .settings-pop {
   position: fixed;
   z-index: 60;
@@ -374,11 +374,12 @@ body {
   border-radius: 10px;
   box-shadow: 0 6px 24px rgba(80, 120, 180, 0.3);
   padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   font-size: 12px;
   width: 190px;
+}
+
+.settings-pop[hidden] {
+  display: none !important;
 }
 
 .settings-pop label {
@@ -386,6 +387,21 @@ body {
   align-items: center;
   gap: 8px;
   color: var(--ink-dim);
+}
+
+.tb-btn svg {
+  display: block;
+  margin: auto;
+}
+
+#btn-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#btn-add svg {
+  color: #fff;
 }
 
 .settings-pop input[type="range"] {

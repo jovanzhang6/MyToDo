@@ -132,6 +132,12 @@ pub fn set_always_on_top(app: AppHandle, window: WebviewWindow, on: bool) -> Res
     Ok(())
 }
 
+/// 前端黑匣子：把 JS 侧错误透传到后端日志，便于开发期定位。
+#[tauri::command]
+pub fn log_frontend(msg: String) {
+    eprintln!("[前端] {msg}");
+}
+
 /// 设置玻璃层不透明度（0.10–0.95，越界收敛）。
 #[tauri::command]
 pub fn set_opacity(app: AppHandle, opacity: f32) -> Result<f32, String> {

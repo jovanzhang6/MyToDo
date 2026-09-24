@@ -1,7 +1,7 @@
 # 蓝图：MyToDo（Windows 桌面 TODO 小组件）
 > 状态：已评审（2026-09-24 关卡 0 通过；应业主要求由 4 切片并为 2 切片，技术栈 Tauri 2 确认）
 > 项目：mytodo
-> 进度：2/2 切片完成（2026-09-25）。实施中修订：统计所需每日完成日志（daily_log）与提醒字段并入 Database（serde default 向后兼容），对「统计只读不改 schema」的原约定的扩充，见切片 2 design.md。
+> 进度：2/2 切片完成（2026-09-25）。实施中修订：① daily_log 与提醒字段并入 Database（serde default 向后兼容）；② 应业主反馈，统计与设置均升级为窗口内独立整页（views.ts 三视图互斥），daily_log 扩为全任务计数（done/total × daily/all），信息架构按 PM 三问重组——详见切片 2 design.md 实施中修订与 docs/vibe/mytodo/decisions.md（自主拍板留痕）。E 系安装验收（toast 署名/自启/卸载保数据）待业主晨检。
 
 ## 项目目标
 

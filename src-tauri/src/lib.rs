@@ -67,6 +67,7 @@ pub fn run() {
             commands::set_always_on_top,
             commands::set_opacity,
             commands::set_reminders_enabled,
+            commands::set_autostart,
             commands::log_frontend,
             commands::hide_window
         ])

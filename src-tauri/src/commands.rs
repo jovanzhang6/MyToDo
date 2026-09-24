@@ -25,6 +25,7 @@ pub struct StateDto {
     pub always_on_top: bool,
     pub glass_opacity: f32,
     pub reminders_enabled: bool,
+    pub autostart_enabled: bool,
     pub stats: crate::stats::StatsDto,
 }
 
@@ -62,6 +63,10 @@ pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
         always_on_top: todo::always_on_top(&db),
         glass_opacity: db.window.and_then(|w| w.opacity).unwrap_or(0.5),
         reminders_enabled: db.reminders_enabled,
+        autostart_enabled: {
+            use tauri_plugin_autostart::ManagerExt;
+            app.autolaunch().is_enabled().unwrap_or(false)
+        },
         stats: crate::stats::compute_stats(&db, today),
     };
     drop(db);
@@ -186,6 +191,19 @@ pub fn set_reminders_enabled(app: AppHandle, on: bool) -> Result<(), String> {
     crate::store::save(&state.db.lock().unwrap(), &state.path)
         .map_err(|e| format!("保存失败：{e}"))?;
     Ok(())
+}
+
+/// 开机自启开关（设置页；状态以系统注册态为唯一事实源）。
+#[tauri::command]
+pub fn set_autostart(app: AppHandle, on: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let launcher = app.autolaunch();
+    let result = if on {
+        launcher.enable()
+    } else {
+        launcher.disable()
+    };
+    result.map_err(|e| format!("设置开机自启失败：{e}"))
 }
 
 static HIDE_TIP_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

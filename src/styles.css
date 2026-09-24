@@ -614,50 +614,109 @@ body {
   line-height: 1.5;
 }
 
-/* ── 设置气泡（透明度滑杆，声明式 DOM + hidden 切换） ── */
-.settings-pop {
-  position: fixed;
-  z-index: 60;
-  background: rgba(250, 253, 255, 0.97);
-  border: 1px solid rgba(61, 139, 212, 0.35);
-  border-radius: 10px;
-  box-shadow: 0 6px 24px rgba(80, 120, 180, 0.3);
-  padding: 12px;
-  font-size: 12px;
-  width: max-content; /* 内容自适应：选项名不换行后 190px 固定宽会溢出 */
-  max-width: calc(100vw - 16px);
-}
-
-.settings-pop[hidden] {
-  display: none !important;
-}
-
-.settings-pop label {
+/* ── 设置整页（与统计页共用 stats-scroll/card 体系） ── */
+#settings-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--ink-dim);
-}
-
-.settings-pop .opt-name {
-  flex: none;
-  white-space: nowrap;
-}
-
-.settings-pop input[type="range"] {
-  width: 110px; /* max-content 下默认宽度失控，给定值 */
+  padding: 6px 10px 2px;
+  font-size: 13px;
+  color: var(--ink);
   flex: none;
 }
 
-.tb-btn svg {
-  display: block;
-  margin: auto;
-}
-
-#btn-add {
+.set-row {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
+  padding: 7px 0;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.set-row + .set-row {
+  border-top: 1px solid rgba(120, 150, 180, 0.12);
+}
+
+.set-row > span {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.set-row > span small {
+  display: block;
+  color: var(--ink-dim);
+  font-size: 11px;
+}
+
+.set-value {
+  flex: none;
+  width: 38px;
+  text-align: right;
+  color: var(--ink);
+}
+
+.set-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+  min-width: 0;
+}
+
+/* 拨动开关 */
+.switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 19px;
+  cursor: pointer;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.switch i {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: rgba(120, 150, 180, 0.35);
+  transition: background 0.15s;
+  pointer-events: none;
+}
+
+.switch i::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s;
+}
+
+.switch input:checked + i {
+  background: var(--accent);
+}
+
+.switch input:checked + i::after {
+  transform: translateX(15px);
+}
+
+.about-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--ink);
+  margin-bottom: 4px;
 }
 
 #btn-add svg {

@@ -1,15 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import {
-  initTitlebar,
-  setPin,
-  setGlassOpacity,
-  setRemindersEnabled,
-} from "./ui/titlebar";
+import { initTitlebar, setPin } from "./ui/titlebar";
 import { renderList } from "./ui/list";
 import { initAddbar } from "./ui/addbar";
 import { initStatsPage, renderStats } from "./ui/stats";
+import { initSettingsPage, renderSettings } from "./ui/settings";
 
 export interface TaskView {
   id: string;
@@ -40,6 +36,7 @@ export interface StateDto {
   always_on_top: boolean;
   glass_opacity: number;
   reminders_enabled: boolean;
+  autostart_enabled: boolean;
   stats: StatsDto;
 }
 
@@ -68,9 +65,8 @@ export async function refresh(): Promise<void> {
     state = await invoke<StateDto>("get_state");
     renderList(document.getElementById("list")!, state, refresh);
     setPin(state.always_on_top);
-    setGlassOpacity(state.glass_opacity);
-    setRemindersEnabled(state.reminders_enabled);
     renderStats(state);
+    renderSettings(state);
   } catch (e) {
     console.error("get_state 失败", e);
   }
@@ -110,6 +106,7 @@ async function init(): Promise<void> {
   initTitlebar(cur);
   initAddbar(refresh);
   initStatsPage();
+  initSettingsPage();
   await listen("state-changed", refresh);
   window.addEventListener("focus", refresh);
   await refresh();

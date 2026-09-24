@@ -85,14 +85,43 @@
           </section>
         </div>
       </div>
-      <div id="settings-pop" class="settings-pop" hidden>
-        <label><span class="opt-name">不透明度</span>
-          <input type="range" id="opacity-slider" min="10" max="95" step="5" value="50" />
-          <span id="opacity-value" class="opacity-value">50%</span>
-        </label>
-        <label><span class="opt-name">到期提醒</span>
-          <input type="checkbox" id="reminders-toggle" />
-        </label>
+      <div id="view-settings" class="view" hidden>
+        <header id="settings-header">
+          <button id="btn-settings-back" class="tb-btn" title="返回清单" aria-label="返回清单">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg>
+          </button>
+          <b>设置</b>
+        </header>
+        <div class="stats-scroll">
+          <section class="card">
+            <h3>外观</h3>
+            <div class="set-row">
+              <span>不透明度</span>
+              <input type="range" id="opacity-slider" min="10" max="95" step="5" value="50" />
+              <b id="opacity-value" class="set-value">50%</b>
+            </div>
+          </section>
+          <section class="card">
+            <h3>行为</h3>
+            <div class="set-row">
+              <span>到期提醒<small>限时任务到期当天通知一次</small></span>
+              <label class="switch"><input type="checkbox" id="reminders-toggle" /><i></i></label>
+            </div>
+            <div class="set-row">
+              <span>窗口置顶<small>常驻其他窗口之上</small></span>
+              <label class="switch"><input type="checkbox" id="pin-toggle" /><i></i></label>
+            </div>
+            <div class="set-row">
+              <span>开机自启<small>登录 Windows 后自动运行</small></span>
+              <label class="switch"><input type="checkbox" id="autostart-toggle" /><i></i></label>
+            </div>
+          </section>
+          <section class="card">
+            <h3>关于</h3>
+            <div class="about-row"><span>MyToDo</span><b>v0.1.0</b></div>
+            <small class="muted">数据保存在本机 %APPDATA%/com.mytodo.app/data.json，卸载不会删除。</small>
+          </section>
+        </div>
       </div>
       <div id="stats-panel" class="stats-panel" hidden>
         <div class="stat-hero"><span id="stat-today">0 / 0</span><small>今日完成</small></div>

@@ -6,6 +6,8 @@ mod window;
 
 use tauri::Manager;
 
+use crate::commands::AppState;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -39,8 +41,16 @@ pub fn run() {
             });
 
             let window = handle.get_webview_window("main").expect("缺少主窗口");
+            let saved_opacity = handle
+                .state::<AppState>()
+                .db
+                .lock()
+                .unwrap()
+                .window
+                .and_then(|w| w.opacity)
+                .unwrap_or(0.5);
             window::apply_startup_geometry(&handle, &window);
-            window::apply_blur(&window);
+            window::apply_blur(&window, saved_opacity);
             window::watch_geometry(&handle, &window);
             tray::setup(&handle)?;
             Ok(())

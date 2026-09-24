@@ -7,7 +7,7 @@ use crate::todo::WindowState;
 
 /// 启动时应用几何：有记忆（且尺寸合法）用记忆，否则主屏右上角留边；置顶按记忆。
 pub fn apply_startup_geometry(app: &AppHandle, window: &WebviewWindow) {
-    let saved = app.state::<AppState>().db.lock().unwrap().window;
+            let saved = app.state::<AppState>().db.lock().unwrap().window;
     match saved {
         Some(ws) if ws.width > 0 && ws.height > 0 => {
             let _ = window.set_position(PhysicalPosition::new(ws.x, ws.y));
@@ -28,16 +28,20 @@ pub fn apply_startup_geometry(app: &AppHandle, window: &WebviewWindow) {
     let _ = window.set_always_on_top(on_top);
 }
 
-/// 淡蓝磨砂：Mica 优先——它不随窗口聚焦/失焦变化（用户反馈 Acrylic 两态透明度不一致）；
-/// 失败则退回纯 CSS 半透明玻璃层，功能无损。
-pub fn apply_blur(window: &WebviewWindow) {
+/// 淡蓝磨砂：Acrylic 真材质，透明度直接由 tint alpha 承载（滑杆实时可调、可看穿）。
+/// 注意：Windows 的 Acrylic 在窗口失焦时材质会略微变实，这是系统级行为。
+/// Acrylic 不可用时退回 Mica（此时滑杆只能影响 CSS 叠层），最终兜底纯 CSS 半透明。
+pub fn apply_blur(window: &WebviewWindow, opacity: f32) {
     #[cfg(target_os = "windows")]
     {
-        use window_vibrancy::apply_mica;
-        let _ = apply_mica(window, None);
+        use window_vibrancy::{apply_acrylic, apply_mica};
+        let alpha = (opacity.clamp(0.10, 0.95) * 255.0).round() as u8;
+        if apply_acrylic(window, Some((216, 233, 248, alpha))).is_err() {
+            let _ = apply_mica(window, None);
+        }
     }
     #[cfg(not(target_os = "windows"))]
-    let _ = window;
+    let _ = (window, opacity);
 }
 
 /// 拖动/缩放期间事件洪泛，静默 400ms 后才把当前几何落盘。

@@ -46,8 +46,15 @@ Task      { id, text, kind: Daily|Limited|Open, due_date: Option<日期>,   // �
             created_date, done_date: Option<日期> }                        // Some=本轮已完成
 Archive   { 快照(Task), outcome: CompletedOn|ExpiredUnfinished|DeletedByUser, removed_date }
 Database  { schema_version, last_active_date, tasks: Vec<Task>, archive: Vec<Archive>,
-            window: {x,y,w,h,always_on_top}, settings: { autostart } }
+            window: {x,y,w,h,always_on_top} }
 ```
+
+> 实施中修订（2026-09-24，关卡 2 已过）：`settings.autostart` 从 JSON 中移除——自启状态直接以 tauri-plugin-autostart 的系统注册态为唯一事实源，托盘勾选态实时读它，避免双状态源漂移。
+>
+> 实施中修订（2026-09-25，两轮业主反馈驱动）：
+> ① 磨砂材质最终定为 **Acrylic，透明度由 tint alpha 承载**——滑杆（P1 提前落地）实时重涂材质；Mica 曾作为聚焦一致性方案短暂采用，但其底盘不透明使滑杆失效，弃用。Acrylic 失焦略变实为系统行为，已向业主说明，如反馈强烈再做聚焦补偿。
+> ② 引入 tauri-plugin-notification 提前到本切片，仅用于「关闭到托盘」的一次性反馈；开发模式借用 PowerShell 身份发 toast 属已知现象，打包安装后署名即为本应用。
+> ③ 窗口 `shadow: true` 恢复（系统圆角与阴影），CSS 圆角对齐 8px，消除 CSS 圆角外灰直角。
 
 归档只增不删（物理删除不存在）；切片 2 统计直接读 archive，不动 schema。
 

@@ -138,9 +138,13 @@ pub fn log_frontend(msg: String) {
     eprintln!("[前端] {msg}");
 }
 
-/// 设置玻璃层不透明度（0.10–0.95，越界收敛）。
+/// 设置玻璃层不透明度（0.10–0.95）：落盘并即时重涂 Acrylic 材质。
 #[tauri::command]
-pub fn set_opacity(app: AppHandle, opacity: f32) -> Result<f32, String> {
+pub fn set_opacity(
+    app: AppHandle,
+    window: WebviewWindow,
+    opacity: f32,
+) -> Result<f32, String> {
     let clamped = opacity.clamp(0.10, 0.95);
     let state = app.state::<AppState>();
     {
@@ -150,6 +154,7 @@ pub fn set_opacity(app: AppHandle, opacity: f32) -> Result<f32, String> {
     }
     crate::store::save(&state.db.lock().unwrap(), &state.path)
         .map_err(|e| format!("保存失败：{e}"))?;
+    crate::window::apply_blur(&window, clamped);
     Ok(clamped)
 }
 

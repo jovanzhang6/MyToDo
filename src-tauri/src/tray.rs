@@ -49,6 +49,18 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
         .icon(app.default_window_icon().expect("no default icon").clone())
         .menu(&menu)
         .tooltip("MyToDo")
+        // 左键单击 = 显示/隐藏切换；右键才弹菜单（业主交互约定）
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| {
+            if let tauri::tray::TrayIconEvent::Click {
+                button: tauri::tray::MouseButton::Left,
+                button_state: tauri::tray::MouseButtonState::Up,
+                ..
+            } = event
+            {
+                toggle_main(tray.app_handle());
+            }
+        })
         .on_menu_event(|app, event| match event.id().as_ref() {
             "toggle" => toggle_main(app),
             "quit" => app.exit(0),

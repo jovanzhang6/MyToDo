@@ -1,0 +1,137 @@
+//! Tauri 命令层：取本地日期 → 引擎 → 落盘 → 广播。业务规则一概不在这里。
+
+use std::sync::Mutex;
+
+use chrono::{Local, NaiveDate};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
+
+use crate::todo::{self, Database, Kind, TaskView, WindowState};
+use crate::tray::TrayHandles;
+
+pub struct AppState {
+    pub db: Mutex<Database>,
+    pub path: std::path::PathBuf,
+}
+
+pub fn today() -> NaiveDate {
+    Local::now().date_naive()
+}
+
+#[derive(Serialize)]
+pub struct StateDto {
+    pub today: NaiveDate,
+    pub tasks: Vec<TaskView>,
+    pub always_on_top: bool,
+}
+
+/// 所有命令共用的推进-落盘-广播三连。引擎幂等，重复调用无害。
+fn finalize(app: &AppHandle, state: &AppState, changed: bool) -> Result<(), String> {
+    if changed {
+        crate::store::save(&state.db.lock().unwrap(), &state.path)
+            .map_err(|e| format!("保存失败：{e}"))?;
+        app.emit("state-changed", ()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
+    let state = app.state::<AppState>();
+    let mut db = state.db.lock().unwrap();
+    let changed = todo::roll_over(&mut db, today());
+    let dto = StateDto {
+        today: today(),
+        tasks: todo::build_view(&db, today()),
+        always_on_top: todo::always_on_top(&db),
+    };
+    drop(db);
+    finalize(&app, &state, changed)?;
+    Ok(dto)
+}
+
+#[tauri::command]
+pub fn add_task(
+    app: AppHandle,
+    text: String,
+    kind: Kind,
+    due_date: Option<NaiveDate>,
+) -> Result<String, String> {
+    let state = app.state::<AppState>();
+    let mut db = state.db.lock().unwrap();
+    let result = todo::add_task(&mut db, today(), &text, kind, due_date);
+    let changed = result.is_ok();
+    drop(db);
+    finalize(&app, &state, changed)?;
+    result.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn toggle_done(app: AppHandle, id: String) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut db = state.db.lock().unwrap();
+    let result = todo::toggle_done(&mut db, today(), &id);
+    let changed = result.is_ok();
+    drop(db);
+    finalize(&app, &state, changed)?;
+    result.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_kind(
+    app: AppHandle,
+    id: String,
+    kind: Kind,
+    due_date: Option<NaiveDate>,
+) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut db = state.db.lock().unwrap();
+    let result = todo::set_kind(&mut db, &id, kind, due_date);
+    let changed = result.is_ok();
+    drop(db);
+    finalize(&app, &state, changed)?;
+    result.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn edit_text(app: AppHandle, id: String, text: String) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut db = state.db.lock().unwrap();
+    let result = todo::edit_text(&mut db, &id, &text);
+    let changed = result.is_ok();
+    drop(db);
+    finalize(&app, &state, changed)?;
+    result.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_task(app: AppHandle, id: String) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let mut db = state.db.lock().unwrap();
+    let result = todo::delete_task(&mut db, today(), &id);
+    let changed = result.is_ok();
+    drop(db);
+    finalize(&app, &state, changed)?;
+    result.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_always_on_top(app: AppHandle, window: WebviewWindow, on: bool) -> Result<(), String> {
+    window.set_always_on_top(on).map_err(|e| e.to_string())?;
+    let state = app.state::<AppState>();
+    let mut db = state.db.lock().unwrap();
+    let ws = db.window.get_or_insert_with(WindowState::default);
+    ws.always_on_top = on;
+    drop(db);
+    finalize(&app, &state, true)?;
+    if let Some(handles) = app.try_state::<TrayHandles>() {
+        let _ = handles.pin.set_checked(on);
+    }
+    Ok(())
+}
+
+/// 关闭按钮 = 隐藏到托盘（应用不退出）。
+#[tauri::command]
+pub fn hide_window(window: WebviewWindow) -> Result<(), String> {
+    window.hide().map_err(|e| e.to_string())
+}

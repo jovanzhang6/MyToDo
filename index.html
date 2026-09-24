@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MyToDo</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="titlebar">
+        <span id="app-title">MyToDo</span>
+        <span id="tb-buttons">
+          <button id="btn-pin" class="tb-btn" title="置顶开关">📌</button>
+          <button id="btn-close" class="tb-btn" title="隐藏到托盘">×</button>
+        </span>
+      </header>
+      <main id="list" aria-live="polite"></main>
+      <footer id="addbar">
+        <div id="kind-row">
+          <label><input type="radio" name="kind" value="open" checked />不限时</label>
+          <label><input type="radio" name="kind" value="daily" />每日</label>
+          <label><input type="radio" name="kind" value="limited" />限时</label>
+          <span id="due-wrap" hidden>
+            <input type="date" id="due-date" />
+          </span>
+        </div>
+        <div id="input-row">
+          <input id="new-task" type="text" placeholder="要做点什么？回车添加" maxlength="200" />
+          <button id="btn-add" title="添加">＋</button>
+        </div>
+        <div id="tip"></div>
+      </footer>
+      <div id="resize-strip-n" class="rz rz-n" data-dir="North"></div>
+      <div id="resize-strip-s" class="rz rz-s" data-dir="South"></div>
+      <div id="resize-strip-e" class="rz rz-e" data-dir="East"></div>
+      <div id="resize-strip-w" class="rz rz-w" data-dir="West"></div>
+      <div id="resize-strip-nw" class="rz rz-nw" data-dir="NorthWest"></div>
+      <div id="resize-strip-ne" class="rz rz-ne" data-dir="NorthEast"></div>
+      <div id="resize-strip-sw" class="rz rz-sw" data-dir="SouthWest"></div>
+      <div id="resize-strip-se" class="rz rz-se" data-dir="SouthEast"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

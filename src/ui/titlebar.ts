@@ -51,7 +51,9 @@ export function initTitlebar(win: Window): void {
       slider.value = String(Math.round(currentOpacity * 100));
       valueLabel.textContent = `${slider.value}%`;
       const btn = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      pop.style.left = Math.max(8, Math.min(btn.left - 70, window.innerWidth - 206)) + "px";
+      const pw = pop.offsetWidth || 206; // 显示后量实际宽度，避免硬编码漂移
+      pop.style.left =
+        Math.max(8, Math.min(btn.left - 20, window.innerWidth - pw - 8)) + "px";
       pop.style.top = btn.bottom + 6 + "px";
     }
   });

@@ -451,7 +451,8 @@ body {
   box-shadow: 0 6px 24px rgba(80, 120, 180, 0.3);
   padding: 12px;
   font-size: 12px;
-  width: 190px;
+  width: max-content; /* 内容自适应：选项名不换行后 190px 固定宽会溢出 */
+  max-width: calc(100vw - 16px);
 }
 
 .settings-pop[hidden] {
@@ -468,6 +469,11 @@ body {
 .settings-pop .opt-name {
   flex: none;
   white-space: nowrap;
+}
+
+.settings-pop input[type="range"] {
+  width: 110px; /* max-content 下默认宽度失控，给定值 */
+  flex: none;
 }
 
 .tb-btn svg {

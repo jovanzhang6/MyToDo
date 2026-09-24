@@ -316,37 +316,40 @@ body {
   align-items: center;
   gap: 4px;
   margin-left: auto; /* 同行时靠右；换行时整体另起一行 */
+  white-space: nowrap;
+}
+
+#due-date {
+  width: 110px; /* 原生默认 ~150px 是撑爆单行的元凶 */
+  border: 1px solid rgba(120, 150, 180, 0.4);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink);
+}
+
+#due-wrap .quick {
+  flex: none;
+  border: none;
+  background: rgba(120, 150, 180, 0.14);
+  color: var(--ink-dim);
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#due-wrap .quick:hover {
+  color: var(--accent);
+  background: rgba(61, 139, 212, 0.15);
 }
 
 .due-label {
   color: var(--ink-dim);
   white-space: nowrap;
-}
-
-#due-wrap .quick {
-  border: none;
-  background: rgba(120, 150, 180, 0.14);
-  color: var(--ink-dim);
-  border-radius: 5px;
-  font-size: 11px;
-  padding: 2px 5px;
-  margin-left: 3px;
-  cursor: pointer;
-}
-
-#due-wrap .quick:hover {
-  color: var(--accent);
-}
-
-#due-date {
-  border: 1px solid rgba(120, 150, 180, 0.4);
-  border-radius: 5px;
-  font: inherit;
-  font-size: 12px;
-  padding: 1px 4px;
-  background: rgba(255, 255, 255, 0.8);
-  color: var(--ink);
-  margin-right: 4px;
 }
 
 #input-row {

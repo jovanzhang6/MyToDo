@@ -43,13 +43,16 @@ pub struct ArchiveEntry {
     pub removed_date: NaiveDate,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub struct WindowState {
     pub x: i32,
     pub y: i32,
     pub width: u32,
     pub height: u32,
     pub always_on_top: bool,
+    /// 玻璃层不透明度 0.10–0.95；None = 默认 0.5。P1 透明度滑杆随用户要求提前落地。
+    #[serde(default)]
+    pub opacity: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

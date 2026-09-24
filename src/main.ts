@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { initTitlebar, setPin } from "./ui/titlebar";
+import { initTitlebar, setPin, setGlassOpacity } from "./ui/titlebar";
 import { renderList } from "./ui/list";
 import { initAddbar } from "./ui/addbar";
 
@@ -18,6 +18,7 @@ export interface StateDto {
   today: string;
   tasks: TaskView[];
   always_on_top: boolean;
+  glass_opacity: number;
 }
 
 export type Refresh = () => Promise<void>;
@@ -32,6 +33,7 @@ export async function refresh(): Promise<void> {
     state = await invoke<StateDto>("get_state");
     renderList(document.getElementById("list")!, state, refresh);
     setPin(state.always_on_top);
+    setGlassOpacity(state.glass_opacity);
   } catch (e) {
     console.error("get_state 失败", e);
   }

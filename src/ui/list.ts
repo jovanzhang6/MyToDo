@@ -151,7 +151,7 @@ function openKindPop(e: MouseEvent, task: TaskView, refresh: Refresh): void {
 
   const ok = document.createElement("button");
   ok.className = "pop-ok";
-  ok.textContent = "应用";
+  ok.textContent = "确认";
   ok.addEventListener("click", () => {
     const kind = (pop.querySelector<HTMLInputElement>('[name="pop-kind"]:checked')?.value ??
       task.kind) as TaskView["kind"];

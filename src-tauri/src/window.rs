@@ -28,14 +28,13 @@ pub fn apply_startup_geometry(app: &AppHandle, window: &WebviewWindow) {
     let _ = window.set_always_on_top(on_top);
 }
 
-/// 淡蓝磨砂：Acrylic 优先，失败降级 Mica；再失败保留 CSS 半透明（最坏兜底，功能无损）。
+/// 淡蓝磨砂：Mica 优先——它不随窗口聚焦/失焦变化（用户反馈 Acrylic 两态透明度不一致）；
+/// 失败则退回纯 CSS 半透明玻璃层，功能无损。
 pub fn apply_blur(window: &WebviewWindow) {
     #[cfg(target_os = "windows")]
     {
-        use window_vibrancy::{apply_acrylic, apply_mica};
-        if apply_acrylic(window, Some((216, 233, 248, 120))).is_err() {
-            let _ = apply_mica(window, None);
-        }
+        use window_vibrancy::apply_mica;
+        let _ = apply_mica(window, None);
     }
     #[cfg(not(target_os = "windows"))]
     let _ = window;
@@ -54,28 +53,30 @@ pub fn watch_geometry(app: &AppHandle, window: &WebviewWindow) {
     std::thread::spawn(move || {
         while rx.recv().is_ok() {
             while rx.recv_timeout(std::time::Duration::from_millis(400)).is_ok() {}
-            let always_on_top = current_always_on_top(&handle);
-            let ws = WindowState {
-                x: win.outer_position().map(|p| p.x).unwrap_or(0),
-                y: win.outer_position().map(|p| p.y).unwrap_or(0),
-                width: win.outer_size().map(|s| s.width).unwrap_or(0),
-                height: win.outer_size().map(|s| s.height).unwrap_or(0),
-                always_on_top,
-            };
-            persist_geometry(&handle, ws);
+            persist_geometry(
+                &handle,
+                (
+                    win.outer_position().map(|p| p.x).unwrap_or(0),
+                    win.outer_position().map(|p| p.y).unwrap_or(0),
+                ),
+                (
+                    win.outer_size().map(|s| s.width).unwrap_or(0),
+                    win.outer_size().map(|s| s.height).unwrap_or(0),
+                ),
+            );
         }
     });
 }
 
-fn current_always_on_top(handle: &AppHandle) -> bool {
-    let state = handle.state::<AppState>();
-    let db = state.db.lock().unwrap();
-    db.window.map_or(true, |w| w.always_on_top)
-}
-
-fn persist_geometry(handle: &AppHandle, ws: WindowState) {
+/// 只更新几何，其余字段（置顶、透明度）保留现值，避免拖动把它们冲掉。
+fn persist_geometry(handle: &AppHandle, pos: (i32, i32), size: (u32, u32)) {
     let state = handle.state::<AppState>();
     let mut db = state.db.lock().unwrap();
+    let mut ws = db.window.unwrap_or_default();
+    ws.x = pos.0;
+    ws.y = pos.1;
+    ws.width = size.0;
+    ws.height = size.1;
     db.window = Some(ws);
     let result = crate::store::save(&db, &state.path);
     drop(db);

@@ -11,6 +11,7 @@
       <header id="titlebar">
         <span id="app-title">MyToDo</span>
         <span id="tb-buttons">
+          <button id="btn-settings" class="tb-btn" title="设置">⚙</button>
           <button id="btn-pin" class="tb-btn" title="置顶开关">📌</button>
           <button id="btn-close" class="tb-btn" title="隐藏到托盘">×</button>
         </span>
@@ -22,12 +23,13 @@
           <label><input type="radio" name="kind" value="daily" />每日</label>
           <label><input type="radio" name="kind" value="limited" />限时</label>
           <span id="due-wrap" hidden>
+            <span class="due-label">截止</span>
             <input type="date" id="due-date" />
           </span>
         </div>
         <div id="input-row">
           <input id="new-task" type="text" placeholder="要做点什么？回车添加" maxlength="200" />
-          <button id="btn-add" title="添加">＋</button>
+          <button id="btn-add" title="添加">✓</button>
         </div>
         <div id="tip"></div>
       </footer>

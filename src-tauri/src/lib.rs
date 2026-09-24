@@ -21,6 +21,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let handle = app.handle().clone();
             let db_path = handle
@@ -52,6 +53,7 @@ pub fn run() {
             commands::edit_text,
             commands::delete_task,
             commands::set_always_on_top,
+            commands::set_opacity,
             commands::hide_window
         ])
         .run(tauri::generate_context!())

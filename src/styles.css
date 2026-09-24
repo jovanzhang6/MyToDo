@@ -7,9 +7,12 @@
   --danger: #d4483d;
   --ink: #1c2b3a;
   --ink-dim: #5b7189;
-  --glass: rgba(235, 245, 253, 0.5);
+  /* 玻璃层透明度可由设置滑杆调整（--glass-alpha），默认 0.5 */
+  --glass-base: 235, 245, 253;
+  --glass-alpha: 0.5;
+  --glass: rgba(var(--glass-base), var(--glass-alpha));
   --glass-hover: rgba(255, 255, 255, 0.55);
-  --radius: 12px;
+  --radius: 8px; /* 与 Windows 11 系统窗口圆角一致，避免角落出灰边 */
 }
 
 * {
@@ -112,11 +115,23 @@ body {
   padding: 7px 8px;
   margin-top: 4px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.46);
+  border: 1px solid rgba(130, 160, 190, 0.18);
 }
 
 .task-row:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba(61, 139, 212, 0.35);
+}
+
+/* 已完成：整条降存在感，但划线本身加深加粗，一眼可辨 */
+.task-row.done {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(130, 160, 190, 0.1);
+}
+
+.task-row.done:hover {
+  background: rgba(255, 255, 255, 0.32);
 }
 
 .task-row input[type="checkbox"] {
@@ -135,9 +150,10 @@ body {
 }
 
 .task-row.done .task-text {
+  color: #46586c;
   text-decoration: line-through;
-  color: var(--ink-dim);
-  opacity: 0.75;
+  text-decoration-thickness: 1.6px;
+  text-decoration-color: #2f3f52;
 }
 
 .edit-input {
@@ -187,7 +203,7 @@ body {
   flex: none;
   border: none;
   background: transparent;
-  color: transparent;
+  color: rgba(91, 113, 137, 0.55);
   cursor: pointer;
   font-size: 14px;
   width: 20px;
@@ -271,6 +287,10 @@ body {
   accent-color: var(--accent);
 }
 
+.due-label {
+  color: var(--ink-dim);
+}
+
 #due-wrap .quick {
   border: none;
   background: rgba(120, 150, 180, 0.14);
@@ -343,6 +363,40 @@ body {
   font-size: 12px;
   color: var(--danger);
   min-height: 15px;
+}
+
+/* ── 设置气泡（透明度滑杆） ────────────────────── */
+.settings-pop {
+  position: fixed;
+  z-index: 60;
+  background: rgba(250, 253, 255, 0.97);
+  border: 1px solid rgba(61, 139, 212, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(80, 120, 180, 0.3);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+  width: 190px;
+}
+
+.settings-pop label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-dim);
+}
+
+.settings-pop input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.settings-pop .opacity-value {
+  width: 34px;
+  text-align: right;
+  color: var(--ink);
 }
 
 /* ── 缩放热区（贴边 6px，带对应光标） ───────────── */

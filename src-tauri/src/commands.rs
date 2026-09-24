@@ -23,6 +23,7 @@ pub struct StateDto {
     pub today: NaiveDate,
     pub tasks: Vec<TaskView>,
     pub always_on_top: bool,
+    pub glass_opacity: f32,
 }
 
 /// 所有命令共用的推进-落盘-广播三连。引擎幂等，重复调用无害。
@@ -44,6 +45,7 @@ pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
         today: today(),
         tasks: todo::build_view(&db, today()),
         always_on_top: todo::always_on_top(&db),
+        glass_opacity: db.window.and_then(|w| w.opacity).unwrap_or(0.5),
     };
     drop(db);
     finalize(&app, &state, changed)?;
@@ -130,8 +132,36 @@ pub fn set_always_on_top(app: AppHandle, window: WebviewWindow, on: bool) -> Res
     Ok(())
 }
 
-/// 关闭按钮 = 隐藏到托盘（应用不退出）。
+/// 设置玻璃层不透明度（0.10–0.95，越界收敛）。
 #[tauri::command]
-pub fn hide_window(window: WebviewWindow) -> Result<(), String> {
-    window.hide().map_err(|e| e.to_string())
+pub fn set_opacity(app: AppHandle, opacity: f32) -> Result<f32, String> {
+    let clamped = opacity.clamp(0.10, 0.95);
+    let state = app.state::<AppState>();
+    {
+        let mut db = state.db.lock().unwrap();
+        let ws = db.window.get_or_insert_with(Default::default);
+        ws.opacity = Some(clamped);
+    }
+    crate::store::save(&state.db.lock().unwrap(), &state.path)
+        .map_err(|e| format!("保存失败：{e}"))?;
+    Ok(clamped)
+}
+
+static HIDE_TIP_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 关闭按钮 = 隐藏到托盘（应用不退出）；每次运行首次隐藏时给一条系统通知反馈。
+#[tauri::command]
+pub fn hide_window(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
+    window.hide().map_err(|e| e.to_string())?;
+    use std::sync::atomic::Ordering;
+    if !HIDE_TIP_SHOWN.swap(true, Ordering::Relaxed) {
+        use tauri_plugin_notification::NotificationExt;
+        let _ = app
+            .notification()
+            .builder()
+            .title("MyToDo")
+            .body("已隐藏到托盘：点托盘图标可再显示，右键菜单可退出")
+            .show();
+    }
+    Ok(())
 }

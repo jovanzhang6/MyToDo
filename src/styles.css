@@ -465,6 +465,11 @@ body {
   color: var(--ink-dim);
 }
 
+.settings-pop .opt-name {
+  flex: none;
+  white-space: nowrap;
+}
+
 .tb-btn svg {
   display: block;
   margin: auto;

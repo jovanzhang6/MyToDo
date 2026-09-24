@@ -9,7 +9,7 @@ import {
 } from "./ui/titlebar";
 import { renderList } from "./ui/list";
 import { initAddbar } from "./ui/addbar";
-import { initStatsPanel, renderStats } from "./ui/stats";
+import { initStatsPage, renderStats } from "./ui/stats";
 
 export interface TaskView {
   id: string;
@@ -23,12 +23,15 @@ export interface TaskView {
 export interface StatsDto {
   today_done: number;
   today_total: number;
+  streak_current: number | null;
+  streak_longest: number | null;
+  heatmap: { date: string; done: number; total: number }[];
   rate_daily: number | null;
   rate_limited: number | null;
   rate_open: number | null;
-  streak: number | null;
-  trend: { date: string; done: number; total: number }[];
-  archive_count: number;
+  on_time_rate: number | null;
+  backlog_count: number;
+  oldest_backlog_days: number | null;
 }
 
 export interface StateDto {
@@ -106,7 +109,7 @@ async function init(): Promise<void> {
   initMidnightWatcher();
   initTitlebar(cur);
   initAddbar(refresh);
-  initStatsPanel();
+  initStatsPage();
   await listen("state-changed", refresh);
   window.addEventListener("focus", refresh);
   await refresh();

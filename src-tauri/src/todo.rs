@@ -55,14 +55,15 @@ pub struct WindowState {
     pub opacity: Option<f32>,
 }
 
-/// 一天的每日任务快照：roll_over 关闭该天前记录，streak/完成率/趋势的数据源。
+/// 一天的任务快照（计数制）：roll_over 关闭该天前记录。
+/// daily 两个数支撑打卡 streak；all 两个数支撑热力图/趋势（含限时、不限时的当日完成）。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DailyLogEntry {
     pub date: NaiveDate,
-    /// 该日已勾选的任务 id
-    pub done_ids: Vec<String>,
-    /// 该日应呈现的任务 id（全量）
-    pub total_ids: Vec<String>,
+    pub done_daily: u32,
+    pub total_daily: u32,
+    pub done_all: u32,
+    pub total_all: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -104,23 +105,22 @@ pub fn new_database() -> Database {
     }
 }
 
-/// 该天的每日任务快照（roll_over 关闭一天前调用）。
+/// 该天的全任务快照（roll_over 关闭一天前调用；此刻的任务状态即该日终态）。
 fn snapshot_daily_log(db: &mut Database, date: NaiveDate) {
-    if db.tasks.iter().any(|t| t.kind == Kind::Daily) {
+    let (done_daily, total_daily) = db.tasks.iter().fold((0u32, 0u32), |acc, t| match t.kind {
+        Kind::Daily => (acc.0 + t.done_date.is_some() as u32, acc.1 + 1),
+        _ => acc,
+    });
+    let done_all = db.tasks.iter().filter(|t| t.done_date.is_some()).count() as u32;
+    let total_all = db.tasks.len() as u32;
+    // 全空的一天不记（应用未使用的日子不污染热力图）
+    if total_all > 0 {
         db.daily_log.push(DailyLogEntry {
             date,
-            done_ids: db
-                .tasks
-                .iter()
-                .filter(|t| t.kind == Kind::Daily && t.done_date.is_some())
-                .map(|t| t.id.clone())
-                .collect(),
-            total_ids: db
-                .tasks
-                .iter()
-                .filter(|t| t.kind == Kind::Daily)
-                .map(|t| t.id.clone())
-                .collect(),
+            done_daily,
+            total_daily,
+            done_all,
+            total_all,
         });
     }
 }

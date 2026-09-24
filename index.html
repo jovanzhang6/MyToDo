@@ -25,25 +25,66 @@
           </button>
         </span>
       </header>
-      <main id="list" aria-live="polite"></main>
-      <footer id="addbar">
-        <div id="kind-row">
-          <label><input type="radio" name="kind" value="open" checked /><span class="kind-name">不限时</span></label>
-          <label><input type="radio" name="kind" value="daily" /><span class="kind-name">每日</span></label>
-          <label><input type="radio" name="kind" value="limited" /><span class="kind-name">限时</span></label>
-          <span id="due-wrap" hidden>
-            <span class="due-label">截止</span>
-            <input type="date" id="due-date" />
-          </span>
-        </div>
-        <div id="input-row">
-          <input id="new-task" type="text" placeholder="要做点什么？回车添加" maxlength="200" />
-          <button id="btn-add" title="添加" aria-label="添加">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.8l4.6 4.4L19.5 7.2"/></svg>
+      <div id="view-list" class="view">
+        <main id="list" aria-live="polite"></main>
+        <footer id="addbar">
+          <div id="kind-row">
+            <label><input type="radio" name="kind" value="open" checked /><span class="kind-name">不限时</span></label>
+            <label><input type="radio" name="kind" value="daily" /><span class="kind-name">每日</span></label>
+            <label><input type="radio" name="kind" value="limited" /><span class="kind-name">限时</span></label>
+            <span id="due-wrap" hidden>
+              <span class="due-label">截止</span>
+              <input type="date" id="due-date" />
+            </span>
+          </div>
+          <div id="input-row">
+            <input id="new-task" type="text" placeholder="要做点什么？回车添加" maxlength="200" />
+            <button id="btn-add" title="添加" aria-label="添加">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.8l4.6 4.4L19.5 7.2"/></svg>
+            </button>
+          </div>
+          <div id="tip"></div>
+        </footer>
+      </div>
+
+      <div id="view-stats" class="view" hidden>
+        <header id="stats-header">
+          <button id="btn-stats-back" class="tb-btn" title="返回清单" aria-label="返回清单">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg>
           </button>
+          <b>统计</b>
+        </header>
+        <div class="stats-scroll">
+          <section class="card hero-card">
+            <div id="ring" class="ring"><span id="ring-num">0/0</span></div>
+            <div class="hero-text">
+              <b id="hero-title">今日完成</b>
+              <small id="hero-sub">剩余 0 件</small>
+            </div>
+          </section>
+          <section class="card streak-card">
+            <div class="streak-big"><span id="streak-num">—</span><small>连续打卡</small></div>
+            <div class="streak-side">最长纪录 <b id="streak-longest">—</b></div>
+          </section>
+          <section class="card">
+            <h3>近 30 天</h3>
+            <div id="heatmap"></div>
+            <small id="heatmap-note" class="muted"></small>
+          </section>
+          <section class="card">
+            <h3>分类完成率（今日）</h3>
+            <div class="rate-row"><span>每日</span><div class="bar-track"><div id="bar-daily" class="bar-fill"></div></div><b id="rate-daily">—</b></div>
+            <div class="rate-row"><span>限时</span><div class="bar-track"><div id="bar-limited" class="bar-fill"></div></div><b id="rate-limited">—</b></div>
+            <div class="rate-row"><span>不限时</span><div class="bar-track"><div id="bar-open" class="bar-fill"></div></div><b id="rate-open">—</b></div>
+          </section>
+          <section class="card">
+            <h3>任务健康</h3>
+            <div class="rate-row"><span>按期完成率</span><div class="bar-track"><div id="bar-ontime" class="bar-fill ontime"></div></div><b id="rate-ontime">—</b></div>
+            <div id="backlog-alert" class="backlog" hidden></div>
+            <small id="health-note" class="muted"></small>
+          </section>
         </div>
-        <div id="tip"></div>
-      </footer>
+      </div>
       <div id="settings-pop" class="settings-pop" hidden>
         <label><span class="opt-name">不透明度</span>
           <input type="range" id="opacity-slider" min="10" max="95" step="5" value="50" />

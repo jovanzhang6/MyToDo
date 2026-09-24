@@ -400,80 +400,218 @@ body {
   min-height: 15px;
 }
 
-/* ── 统计面板（渐进式展开） ───────────────────── */
-.stats-panel {
-  position: fixed;
-  z-index: 55;
-  top: 44px;
-  right: 8px;
-  width: 200px;
-  background: rgba(250, 253, 255, 0.97);
-  border: 1px solid rgba(61, 139, 212, 0.35);
-  border-radius: 10px;
-  box-shadow: 0 6px 24px rgba(80, 120, 180, 0.3);
-  padding: 12px;
-  font-size: 12px;
+/* ── 视图切换（清单页 / 统计页） ──────────────── */
+.view {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  flex: 1;
+  min-height: 0;
 }
 
-.stats-panel[hidden] {
+.view[hidden] {
   display: none !important;
 }
 
-.stat-hero {
-  text-align: center;
-  padding: 4px 0 8px;
-  border-bottom: 1px solid rgba(120, 150, 180, 0.15);
+/* ── 统计整页 ────────────────────────────────── */
+#stats-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 2px;
+  font-size: 13px;
+  color: var(--ink);
+  flex: none;
 }
 
-.stat-hero span {
-  font-size: 22px;
+.stats-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stats-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.stats-scroll::-webkit-scrollbar-thumb {
+  background: rgba(120, 150, 180, 0.3);
+  border-radius: 3px;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(130, 160, 190, 0.18);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.card h3 {
+  font-size: 12px;
   font-weight: 600;
-  color: var(--accent);
-}
-
-.stat-hero small {
-  display: block;
   color: var(--ink-dim);
-  margin-top: 2px;
+  margin-bottom: 8px;
 }
 
-.stat-row {
+.muted {
+  color: var(--ink-dim);
+  font-size: 11px;
+}
+
+/* 今日 hero：进度环 */
+.hero-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ring {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring::before {
+  content: "";
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(250, 253, 255, 0.95);
+}
+
+.ring {
+  position: relative;
+}
+
+#ring-num {
+  position: relative;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.hero-text b {
+  display: block;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.hero-text small {
+  color: var(--ink-dim);
+}
+
+/* streak 卡 */
+.streak-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.streak-big span {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.streak-big small,
+.streak-side {
   color: var(--ink-dim);
+  font-size: 12px;
+  margin-left: 6px;
 }
 
-.stat-row b {
+.streak-side b {
   color: var(--ink);
-  font-weight: 600;
 }
 
-#stat-trend {
-  display: flex;
-  align-items: flex-end;
-  gap: 1px;
-  height: 40px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(120, 150, 180, 0.15);
+/* 热力图 */
+#heatmap {
+  display: grid;
+  grid-template-columns: repeat(15, 1fr);
+  gap: 3px;
 }
 
-#stat-trend .bar {
-  flex: 1;
-  min-height: 2px;
-  background: rgba(61, 139, 212, 0.45);
-  border-radius: 1px 1px 0 0;
+.hm-cell {
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: rgba(120, 150, 180, 0.12);
 }
 
-#stat-trend .bar.full {
+.hm-empty {
+  background: rgba(120, 150, 180, 0.12);
+}
+
+.hm-low {
+  background: rgba(61, 139, 212, 0.3);
+}
+
+.hm-mid {
+  background: rgba(61, 139, 212, 0.6);
+}
+
+.hm-full {
   background: var(--accent);
 }
 
-#stat-trend .bar:empty {
+/* 进度条行 */
+.rate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.rate-row > span {
+  flex: none;
+  width: 62px;
+}
+
+.rate-row b {
+  flex: none;
+  width: 38px;
+  text-align: right;
+  color: var(--ink);
+}
+
+.bar-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
   background: rgba(120, 150, 180, 0.15);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+.bar-fill.ontime {
+  background: #58a942;
+}
+
+/* 积压告警 */
+.backlog {
+  margin-top: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(212, 150, 61, 0.14);
+  border: 1px solid rgba(212, 150, 61, 0.3);
+  color: #a06a1c;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 /* ── 设置气泡（透明度滑杆，声明式 DOM + hidden 切换） ── */

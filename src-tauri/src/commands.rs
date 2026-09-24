@@ -24,6 +24,8 @@ pub struct StateDto {
     pub tasks: Vec<TaskView>,
     pub always_on_top: bool,
     pub glass_opacity: f32,
+    pub reminders_enabled: bool,
+    pub stats: crate::stats::StatsDto,
 }
 
 /// 所有命令共用的推进-落盘-广播三连。引擎幂等，重复调用无害。
@@ -40,12 +42,27 @@ fn finalize(app: &AppHandle, state: &AppState, changed: bool) -> Result<(), Stri
 pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
     let state = app.state::<AppState>();
     let mut db = state.db.lock().unwrap();
-    let changed = todo::roll_over(&mut db, today());
+    let today = today();
+    let mut changed = todo::roll_over(&mut db, today);
+
+    // 到期提醒：跨天/唤醒后检查一次；发送与否都随本次落盘（去重标记）
+    let due = crate::notify::due_decision(&db, today);
+    let reminder_changed = match due {
+        crate::notify::DueDecision::Notify(names) => {
+            crate::notify::send_and_mark(&app, &mut db, today, &names);
+            true
+        }
+        crate::notify::DueDecision::Skip => false,
+    };
+    changed |= reminder_changed;
+
     let dto = StateDto {
-        today: today(),
-        tasks: todo::build_view(&db, today()),
+        today,
+        tasks: todo::build_view(&db, today),
         always_on_top: todo::always_on_top(&db),
         glass_opacity: db.window.and_then(|w| w.opacity).unwrap_or(0.5),
+        reminders_enabled: db.reminders_enabled,
+        stats: crate::stats::compute_stats(&db, today),
     };
     drop(db);
     finalize(&app, &state, changed)?;
@@ -156,6 +173,19 @@ pub fn set_opacity(
         .map_err(|e| format!("保存失败：{e}"))?;
     crate::window::apply_blur(&window, clamped);
     Ok(clamped)
+}
+
+/// 到期提醒总开关（设置面板）。
+#[tauri::command]
+pub fn set_reminders_enabled(app: AppHandle, on: bool) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    {
+        let mut db = state.db.lock().unwrap();
+        db.reminders_enabled = on;
+    }
+    crate::store::save(&state.db.lock().unwrap(), &state.path)
+        .map_err(|e| format!("保存失败：{e}"))?;
+    Ok(())
 }
 
 static HIDE_TIP_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

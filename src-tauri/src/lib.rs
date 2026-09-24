@@ -1,4 +1,6 @@
 mod commands;
+mod notify;
+mod stats;
 mod store;
 mod todo;
 mod tray;
@@ -64,6 +66,7 @@ pub fn run() {
             commands::delete_task,
             commands::set_always_on_top,
             commands::set_opacity,
+            commands::set_reminders_enabled,
             commands::log_frontend,
             commands::hide_window
         ])

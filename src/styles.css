@@ -365,6 +365,82 @@ body {
   min-height: 15px;
 }
 
+/* ── 统计面板（渐进式展开） ───────────────────── */
+.stats-panel {
+  position: fixed;
+  z-index: 55;
+  top: 44px;
+  right: 8px;
+  width: 200px;
+  background: rgba(250, 253, 255, 0.97);
+  border: 1px solid rgba(61, 139, 212, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(80, 120, 180, 0.3);
+  padding: 12px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.stats-panel[hidden] {
+  display: none !important;
+}
+
+.stat-hero {
+  text-align: center;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid rgba(120, 150, 180, 0.15);
+}
+
+.stat-hero span {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.stat-hero small {
+  display: block;
+  color: var(--ink-dim);
+  margin-top: 2px;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink-dim);
+}
+
+.stat-row b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+#stat-trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 40px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(120, 150, 180, 0.15);
+}
+
+#stat-trend .bar {
+  flex: 1;
+  min-height: 2px;
+  background: rgba(61, 139, 212, 0.45);
+  border-radius: 1px 1px 0 0;
+}
+
+#stat-trend .bar.full {
+  background: var(--accent);
+}
+
+#stat-trend .bar:empty {
+  background: rgba(120, 150, 180, 0.15);
+}
+
 /* ── 设置气泡（透明度滑杆，声明式 DOM + hidden 切换） ── */
 .settings-pop {
   position: fixed;

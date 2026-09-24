@@ -11,6 +11,9 @@
       <header id="titlebar">
         <span id="app-title">MyToDo</span>
         <span id="tb-buttons">
+          <button id="btn-stats" class="tb-btn" title="统计" aria-label="统计">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
+          </button>
           <button id="btn-settings" class="tb-btn" title="设置" aria-label="设置">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h8M18 7h2M4 17h2M12 17h8"/><circle cx="15" cy="7" r="2.5"/><circle cx="9" cy="17" r="2.5"/></svg>
           </button>
@@ -46,6 +49,18 @@
           <input type="range" id="opacity-slider" min="10" max="95" step="5" value="50" />
           <span id="opacity-value" class="opacity-value">50%</span>
         </label>
+        <label>到期提醒
+          <input type="checkbox" id="reminders-toggle" />
+        </label>
+      </div>
+      <div id="stats-panel" class="stats-panel" hidden>
+        <div class="stat-hero"><span id="stat-today">0 / 0</span><small>今日完成</small></div>
+        <div class="stat-row"><span>每日任务</span><b id="stat-daily">—</b></div>
+        <div class="stat-row"><span>限时任务</span><b id="stat-limited">—</b></div>
+        <div class="stat-row"><span>不限时任务</span><b id="stat-open">—</b></div>
+        <div class="stat-row"><span>连续打卡</span><b id="stat-streak">—</b></div>
+        <div class="stat-row"><span>累计归档</span><b id="stat-archive">0</b></div>
+        <div id="stat-trend"></div>
       </div>
       <div id="resize-strip-n" class="rz rz-n" data-dir="North"></div>
       <div id="resize-strip-s" class="rz rz-s" data-dir="South"></div>

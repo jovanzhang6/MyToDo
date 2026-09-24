@@ -55,6 +55,16 @@ pub struct WindowState {
     pub opacity: Option<f32>,
 }
 
+/// 一天的每日任务快照：roll_over 关闭该天前记录，streak/完成率/趋势的数据源。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DailyLogEntry {
+    pub date: NaiveDate,
+    /// 该日已勾选的任务 id
+    pub done_ids: Vec<String>,
+    /// 该日应呈现的任务 id（全量）
+    pub total_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Database {
     pub schema_version: u32,
@@ -66,6 +76,19 @@ pub struct Database {
     pub archive: Vec<ArchiveEntry>,
     #[serde(default)]
     pub window: Option<WindowState>,
+    /// 每日任务逐日快照（切片 2 新增，旧数据文件 default 兼容）
+    #[serde(default)]
+    pub daily_log: Vec<DailyLogEntry>,
+    /// 到期提醒：最近一次发送的自然日（同任务同天至多一次的依据）
+    #[serde(default)]
+    pub last_notified_date: Option<NaiveDate>,
+    /// 到期提醒总开关（设置面板）
+    #[serde(default = "default_true")]
+    pub reminders_enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 pub fn new_database() -> Database {
@@ -75,6 +98,30 @@ pub fn new_database() -> Database {
         tasks: Vec::new(),
         archive: Vec::new(),
         window: None,
+        daily_log: Vec::new(),
+        last_notified_date: None,
+        reminders_enabled: true,
+    }
+}
+
+/// 该天的每日任务快照（roll_over 关闭一天前调用）。
+fn snapshot_daily_log(db: &mut Database, date: NaiveDate) {
+    if db.tasks.iter().any(|t| t.kind == Kind::Daily) {
+        db.daily_log.push(DailyLogEntry {
+            date,
+            done_ids: db
+                .tasks
+                .iter()
+                .filter(|t| t.kind == Kind::Daily && t.done_date.is_some())
+                .map(|t| t.id.clone())
+                .collect(),
+            total_ids: db
+                .tasks
+                .iter()
+                .filter(|t| t.kind == Kind::Daily)
+                .map(|t| t.id.clone())
+                .collect(),
+        });
     }
 }
 
@@ -119,6 +166,8 @@ pub fn roll_over(db: &mut Database, today: NaiveDate) -> bool {
     }
     let mut d = last;
     while d < today {
+        // 关闭 `last` 这一天：先留每日任务快照（此刻的任务状态即该日终态）
+        snapshot_daily_log(db, d);
         d = d.succ_opt().expect("date overflow");
         // 1) 处理此前各日勾选的完成态
         let mut i = 0;

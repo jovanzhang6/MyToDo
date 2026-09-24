@@ -315,12 +315,12 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto; /* 同行时靠右；换行时整体另起一行 */
+  margin-left: 4px; /* 紧跟胶囊后；窗口窄时整组换行、左对齐成组，两种形态都是刻意布局 */
   white-space: nowrap;
 }
 
 #due-date {
-  width: 110px; /* 原生默认 ~150px 是撑爆单行的元凶 */
+  width: 104px;
   border: 1px solid rgba(120, 150, 180, 0.4);
   border-radius: 999px;
   font: inherit;

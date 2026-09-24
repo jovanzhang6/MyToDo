@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { initTitlebar, setPin } from "./ui/titlebar";
 import { renderList } from "./ui/list";
 import { initAddbar } from "./ui/addbar";
-import { initStatsPage, renderStats } from "./ui/stats";
+import { renderStats } from "./ui/stats";
 import { initSettingsPage, renderSettings } from "./ui/settings";
 
 export interface TaskView {
@@ -112,7 +112,6 @@ async function init(): Promise<void> {
   initMidnightWatcher();
   initTitlebar(cur);
   initAddbar(refresh);
-  initStatsPage();
   initSettingsPage();
   await listen("state-changed", refresh);
   window.addEventListener("focus", refresh);

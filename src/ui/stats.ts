@@ -1,20 +1,5 @@
 import type { StateDto } from "../main";
 
-/** 统计整页：📊 切换 清单页 ↔ 统计页 */
-export function initStatsPage(): void {
-  const toggle = () => {
-    const list = document.getElementById("view-list")!;
-    const stats = document.getElementById("view-stats")!;
-    list.hidden = !list.hidden;
-    stats.hidden = !stats.hidden;
-  };
-  document.getElementById("btn-stats")!.addEventListener("click", (e) => {
-    e.stopPropagation();
-    toggle();
-  });
-  document.getElementById("btn-stats-back")!.addEventListener("click", toggle);
-}
-
 export function renderStats(state: StateDto): void {
   const s = state.stats;
 

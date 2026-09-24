@@ -7,8 +7,6 @@ export function initStatsPage(): void {
     const stats = document.getElementById("view-stats")!;
     list.hidden = !list.hidden;
     stats.hidden = !stats.hidden;
-    // 打开统计页顺手收掉两个气泡
-    document.getElementById("settings-pop")!.hidden = true;
   };
   document.getElementById("btn-stats")!.addEventListener("click", (e) => {
     e.stopPropagation();

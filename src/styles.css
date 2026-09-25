@@ -464,7 +464,7 @@ body.ball-window #app {
   border-radius: 50%;
   background: linear-gradient(160deg, #6aa7dd 0%, #3d7fc0 100%);
   border: none;
-  box-shadow: 0 6px 22px rgba(30, 60, 100, 0.55);
+  box-shadow: none;
   overflow: hidden;
 }
 

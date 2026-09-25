@@ -31,8 +31,30 @@ pub fn apply_startup_geometry(app: &AppHandle, window: &WebviewWindow) {
 
 /// 悬浮球几何与形态：收球=捕获真实几何→关 resizable→缩到球尺寸→**清掉 Acrylic 材质**
 /// （材质涂满整个矩形窗口，不清掉就无法呈现正圆——四角会露灰）；展球=恢复真实几何+重涂材质。
+/// Win11 会给所有窗口自动圆角（DWM 系统行为），64px 小窗被切角后正圆变不规则椭圆——
+/// 球模式显式关掉系统圆角，展开恢复。
+#[cfg(target_os = "windows")]
+fn set_corner_preference(hwnd_raw: *mut core::ffi::c_void, round: bool) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWM_WINDOW_CORNER_PREFERENCE,
+    };
+    // DWMWCP_DONOTROUND = 1, DWMWCP_ROUND = 2
+    let pref = DWM_WINDOW_CORNER_PREFERENCE(if round { 2 } else { 1 });
+    unsafe {
+        let _ = DwmSetWindowAttribute(
+            HWND(hwnd_raw),
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            &pref as *const _ as *const core::ffi::c_void,
+            std::mem::size_of::<DWM_WINDOW_CORNER_PREFERENCE>() as u32,
+        );
+    }
+}
+
 pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
     let state = app.state::<AppState>();
+    #[cfg(target_os = "windows")]
+    let hwnd_raw = window.hwnd().map(|h| h.0).unwrap_or(std::ptr::null_mut());
     if on {
         // 捕获窗口此刻的真实几何（而非可能滞后的落盘值），展球时所见即所得
         let pos = window.outer_position().unwrap_or_default();
@@ -61,6 +83,9 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
         // 关掉 Tauri 阴影：其 Windows 实现（DWM 边框扩展）会在球周围留下玻璃圆角边框，
         // 且边框会计入 outer_size 造成几何逐轮膨胀
         let _ = window.set_shadow(false);
+        // 关掉 Win11 系统自动圆角（否则 64px 小窗被切角成不规则椭圆）
+        #[cfg(target_os = "windows")]
+        set_corner_preference(hwnd_raw, false);
         // 清材质：让窗口四角真正透明（露桌面而非灰 Acrylic）；失败必须可见
         #[cfg(target_os = "windows")]
         {
@@ -78,19 +103,20 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
             pos.x, pos.y, size.width, size.height
         );
     } else {
-        // 唯一的恢复点：pre_ball 有效性钳位；默认尺寸按 DPI 从逻辑值换算物理值
+        // 唯一的恢复点：尺寸取 pre_ball（有效性钳位）；位置取球的当前位置（在哪展开在哪）
         let scale = window.scale_factor().unwrap_or(1.0);
+        let now = window.outer_position().unwrap_or_default();
         let target = {
             let db = state.db.lock().unwrap();
             match db.pre_ball {
                 Some(pre) if pre.width >= MIN_VALID_W => {
-                    (pre.x, pre.y, pre.width, pre.height, pre.opacity)
+                    (now.x, now.y, pre.width, pre.height, pre.opacity)
                 }
                 _ => {
                     let ws = db.window.unwrap_or_default();
                     (
-                        ws.x,
-                        ws.y,
+                        now.x,
+                        now.y,
                         (DEFAULT_W as f64 * scale) as u32,
                         (DEFAULT_H as f64 * scale) as u32,
                         ws.opacity,
@@ -103,6 +129,9 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
         let _ = window.set_size(tauri::PhysicalSize::new(target.2, target.3));
         let _ = window.set_position(PhysicalPosition::new(target.0, target.1));
         apply_blur(window, target.4.unwrap_or(0.5));
+        // 恢复 Win11 系统圆角
+        #[cfg(target_os = "windows")]
+        set_corner_preference(hwnd_raw, true);
         // 收回球态标记 + 展开即重写记忆（自愈：覆盖任何历史污染）
         {
             let mut db = state.db.lock().unwrap();

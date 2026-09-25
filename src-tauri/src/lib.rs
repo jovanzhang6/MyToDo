@@ -57,6 +57,31 @@ pub fn run() {
             tray::setup(&handle)?;
             // 几何/材质就绪后再显示，避免「左上角白窗闪现再跳右上角」
             window.show().expect("无法显示主窗口");
+
+            // 悬浮球窗口：启动即创建、隐藏待命；尺寸终生不变（独立窗口架构）
+            use tauri::{WebviewUrl, WebviewWindowBuilder};
+            let ball = WebviewWindowBuilder::new(
+                &handle,
+                "ball",
+                WebviewUrl::App("index.html?view=ball".into()),
+            )
+            .title("MyToDo")
+            .inner_size(64.0, 64.0)
+            .decorations(false)
+            .transparent(true)
+            .resizable(false)
+            .shadow(false)
+            .skip_taskbar(true)
+            .always_on_top(true)
+            .visible(false)
+            .build()?;
+            #[cfg(target_os = "windows")]
+            window::set_corner_preference(
+                ball.hwnd().map(|h| h.0).unwrap_or(std::ptr::null_mut()),
+                false,
+            );
+            let _ = ball;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

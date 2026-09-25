@@ -441,21 +441,26 @@ body {
   display: none !important;
 }
 
-/* 悬浮球模式：窗口=实心圆盘（材质已清，透明即真透明），标题栏/缩放热区退场 */
-body.ball-mode #titlebar {
-  display: none;
+/* 悬浮球窗口（label=ball 的独立窗口）：只显示球盘，其余一概退场 */
+body.ball-window #titlebar,
+body.ball-window .rz,
+body.ball-window #addbar,
+body.ball-window #view-list,
+body.ball-window #view-stats,
+body.ball-window #view-settings {
+  display: none !important;
 }
 
-body.ball-mode .rz {
-  display: none;
-}
-
-body.ball-mode #app {
+body.ball-window #app {
   border-radius: 50%;
   background: linear-gradient(160deg, #6aa7dd 0%, #3d7fc0 100%);
   border: none;
   box-shadow: 0 6px 22px rgba(30, 60, 100, 0.55);
   overflow: hidden;
+}
+
+body.ball-window #view-ball {
+  display: flex;
 }
 
 #view-ball {

@@ -34,7 +34,7 @@ pub fn apply_startup_geometry(app: &AppHandle, window: &WebviewWindow) {
 /// Win11 会给所有窗口自动圆角（DWM 系统行为），64px 小窗被切角后正圆变不规则椭圆——
 /// 球模式显式关掉系统圆角，展开恢复。
 #[cfg(target_os = "windows")]
-fn set_corner_preference(hwnd_raw: *mut core::ffi::c_void, round: bool) {
+pub fn set_corner_preference(hwnd_raw: *mut core::ffi::c_void, round: bool) {
     use windows::Win32::Foundation::HWND;
     use windows::Win32::Graphics::Dwm::{
         DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWM_WINDOW_CORNER_PREFERENCE,
@@ -51,18 +51,24 @@ fn set_corner_preference(hwnd_raw: *mut core::ffi::c_void, round: bool) {
     }
 }
 
-pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
+/// 悬浮球切换（独立球窗口架构）：收球=主窗隐藏+球窗显示（就地出现）；
+/// 展开=球窗当前位置显示主窗（尺寸取 pre_ball，出屏钳位）。两窗口尺寸终生不变，
+/// 规避同窗口变形与 DWM/阴影/最小尺寸/WebView 重排的全部竞态。
+pub fn switch_ball_mode(app: &AppHandle, on: bool) {
+    let Some(main) = app.get_webview_window("main") else {
+        return;
+    };
+    let Some(ball) = app.get_webview_window("ball") else {
+        return;
+    };
     let state = app.state::<AppState>();
-    #[cfg(target_os = "windows")]
-    let hwnd_raw = window.hwnd().map(|h| h.0).unwrap_or(std::ptr::null_mut());
     if on {
-        // 捕获窗口此刻的真实几何（而非可能滞后的落盘值），展球时所见即所得
-        let pos = window.outer_position().unwrap_or_default();
-        let size = window.outer_size().unwrap_or_default();
+        let pos = main.outer_position().unwrap_or_default();
+        let size = main.outer_size().unwrap_or_default();
         {
             let mut db = state.db.lock().unwrap();
             let ws = *db.window.get_or_insert_with(Default::default);
-            let pre = WindowState {
+            db.pre_ball = Some(WindowState {
                 x: pos.x,
                 y: pos.y,
                 width: size.width,
@@ -70,77 +76,44 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
                 always_on_top: ws.always_on_top,
                 opacity: ws.opacity,
                 ball_mode: false,
-            };
-            db.pre_ball = Some(pre);
-            // 前端据此切换球视图（漏掉这行 = 窗口缩了但界面还在清单态）
-            db.window = Some(WindowState {
-                ball_mode: true,
-                ..ws
             });
         }
-        let _ = window.set_resizable(false);
-        // 所有会扰动窗口尺寸的调用都放在 set_size 之前——收球路径上只发生一次尺寸变化，
-        // WebView 必然按最终尺寸重排（此前 set_size 先行、纠偏再改，内容停留旧布局导致右下被裁）
-        let _ = window.set_shadow(false);
-        #[cfg(target_os = "windows")]
-        set_corner_preference(hwnd_raw, false);
-        let _ = window.set_size(tauri::PhysicalSize::new(BALL_SIZE, BALL_SIZE));
-        // 清材质：让窗口四角真正透明（露桌面而非灰 Acrylic）；失败必须可见
-        #[cfg(target_os = "windows")]
-        {
-            if let Err(e) = window_vibrancy::clear_acrylic(window) {
-                eprintln!("[球] clear_acrylic 失败: {e:?}");
-            }
-            if let Err(e) = window_vibrancy::clear_mica(window) {
-                eprintln!("[球] clear_mica 失败: {e:?}");
-            }
-        }
-        // 大窗缩小时的边界补偿误差（实测 +22×13 物理像素）：偏离则扳回，并用一次尺寸
-        // 变化事件强制 WebView 重排
-        let actual = window.outer_size().ok().map(|s| (s.width, s.height));
-        if actual != Some((BALL_SIZE, BALL_SIZE)) {
-            let _ = window.set_size(tauri::PhysicalSize::new(BALL_SIZE - 1, BALL_SIZE - 1));
-            let _ = window.set_size(tauri::PhysicalSize::new(BALL_SIZE, BALL_SIZE));
-            let final_size = window.outer_size().map(|s| (s.width, s.height));
-            eprintln!("[球] 首次 set_size 偏移({actual:?})，纠偏后={final_size:?}");
-        }
-        eprintln!("[球] 收球 pre=({},{},{},{})", pos.x, pos.y, size.width, size.height);
-        eprintln!(
-            "[球] 收球 pre=({},{},{},{})",
-            pos.x, pos.y, size.width, size.height
-        );
+        let _ = ball.set_position(PhysicalPosition::new(pos.x, pos.y));
+        let _ = ball.show();
+        let _ = main.hide();
+        eprintln!("[球] 收球 主窗隐藏，球就位 ({},{})", pos.x, pos.y);
     } else {
-        // 唯一的恢复点：尺寸取 pre_ball（有效性钳位）；位置取球的当前位置（在哪展开在哪）
-        let scale = window.scale_factor().unwrap_or(1.0);
-        let now = window.outer_position().unwrap_or_default();
+        // 主窗在球的当前位置展开；出屏钳位（球贴边时展开不越过屏幕）
+        let ball_pos = ball.outer_position().unwrap_or_default();
+        let scale = ball.scale_factor().unwrap_or(1.0);
         let target = {
             let db = state.db.lock().unwrap();
             match db.pre_ball {
-                Some(pre) if pre.width >= MIN_VALID_W => {
-                    (now.x, now.y, pre.width, pre.height, pre.opacity)
-                }
+                Some(pre) if pre.width >= MIN_VALID_W => (pre.width, pre.height, pre.opacity),
                 _ => {
                     let ws = db.window.unwrap_or_default();
-                    (
-                        now.x,
-                        now.y,
-                        (DEFAULT_W as f64 * scale) as u32,
-                        (DEFAULT_H as f64 * scale) as u32,
-                        ws.opacity,
-                    )
+                    (DEFAULT_W, DEFAULT_H, ws.opacity)
                 }
             }
         };
-        let _ = window.set_resizable(true);
-        let _ = window.set_shadow(true);
-        // 先定位后改尺寸：位置不变产生虚影，尺寸变化是最后一步（缩放动画终点即最终形态）
-        let _ = window.set_position(PhysicalPosition::new(target.0, target.1));
-        let _ = window.set_size(tauri::PhysicalSize::new(target.2, target.3));
-        apply_blur(window, target.4.unwrap_or(0.5));
-        // 恢复 Win11 系统圆角
-        #[cfg(target_os = "windows")]
-        set_corner_preference(hwnd_raw, true);
-        // 收回球态标记 + 展开即重写记忆（自愈：覆盖任何历史污染）
+        // pre_ball 是物理像素；set_size 用逻辑值表达同一视觉尺寸
+        let _ = main.set_size(tauri::LogicalSize::new(
+            target.0 as f64 / scale,
+            target.1 as f64 / scale,
+        ));
+        // 出屏钳位：主窗右/下边缘不越出球所在显示器
+        if let Ok(Some(monitor)) = ball.current_monitor() {
+            let m_w = monitor.size().width as i32;
+            let m_h = monitor.size().height as i32;
+            let x = ball_pos.x.clamp(0, (m_w - target.0 as i32).max(0));
+            let y = ball_pos.y.clamp(0, (m_h - target.1 as i32).max(0));
+            let _ = main.set_position(PhysicalPosition::new(x, y));
+        } else {
+            let _ = main.set_position(PhysicalPosition::new(ball_pos.x, ball_pos.y));
+        }
+        let _ = main.show();
+        let _ = main.set_focus();
+        let _ = ball.hide();
         {
             let mut db = state.db.lock().unwrap();
             if let Some(w) = db.window.as_mut() {
@@ -148,15 +121,11 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
             }
             db.pre_ball = None;
         }
-        persist_geometry(app, (target.0, target.1), (target.2, target.3));
-        eprintln!(
-            "[球] 展开 target=({},{},{},{})",
-            target.0, target.1, target.2, target.3
-        );
+        eprintln!("[球] 展开 主窗于球位置显示，球窗隐藏");
     }
 }
 
-/// 展开态几何的合法下限：小于它视为球态污染，走默认值自愈
+
 pub const MIN_VALID_W: u32 = 150;
 
 pub const BALL_SIZE: u32 = 64;

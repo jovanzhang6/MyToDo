@@ -227,12 +227,11 @@ pub fn set_backlog_days(app: AppHandle, days: u32) -> Result<u32, String> {
     Ok(clamped)
 }
 
-/// 悬浮球模式切换：几何与形态全部委托 apply_ball_geometry（单一所有权，
-/// 此前命令层和几何层重复恢复 pre_ball 导致展开尺寸错乱）。
+/// 悬浮球模式切换：委托 switch_ball_mode（独立球窗口架构）。
 #[tauri::command]
-pub fn set_ball_mode(app: AppHandle, window: WebviewWindow, on: bool) -> Result<(), String> {
-    crate::window::apply_ball_geometry(&app, &window, on);
-    // 广播让前端切视图（球视图/清单视图）
+pub fn set_ball_mode(app: AppHandle, on: bool) -> Result<(), String> {
+    crate::window::switch_ball_mode(&app, on);
+    // 广播让两个窗口的前端同步（球窗刷新数字，主窗恢复清单）
     app.emit("state-changed", ()).map_err(|e| e.to_string())
 }
 

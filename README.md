@@ -2,13 +2,15 @@
 
 # MyToDo
 
-**一款常驻桌面的磨砂玻璃 TODO 小组件 · 每日任务自动刷新 · 限时任务到期提醒**
+**再好的 TODO，不如一个用得下去的。**
 
 [![CI](https://github.com/jovanzhang6/MyToDo/actions/workflows/ci.yml/badge.svg)](https://github.com/jovanzhang6/MyToDo/actions/workflows/ci.yml)
 [![Release](https://github.com/jovanzhang6/MyToDo/actions/workflows/release.yml/badge.svg)](https://github.com/jovanzhang6/MyToDo/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Release Version](https://img.shields.io/github/v/release/jovanzhang6/MyToDo)](https://github.com/jovanzhang6/MyToDo/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%2011-blue)](https://github.com/jovanzhang6/MyToDo/releases)
+
+<img src="docs/assets/hero.png" alt="MyToDo 效果图" width="100%">
 
 English | [简体中文](#功能)
 

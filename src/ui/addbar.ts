@@ -31,11 +31,15 @@ export function initAddbar(refresh: Refresh): void {
   quick.addEventListener("click", () => shiftDue(1));
   dueWrap.appendChild(quick);
 
+  // 截止日期组只在「限时」选中时展示（初始化即同步，防初始状态漏藏）
+  const syncDueWrap = () => {
+    dueWrap.hidden = kind() !== "limited";
+    if (!dueWrap.hidden && !dueDate.value) dueDate.value = localToday();
+  };
+  syncDueWrap();
+
   document.querySelectorAll<HTMLInputElement>('[name="kind"]').forEach((radio) => {
-    radio.addEventListener("change", () => {
-      dueWrap.hidden = kind() !== "limited";
-      if (!dueWrap.hidden && !dueDate.value) dueDate.value = localToday();
-    });
+    radio.addEventListener("change", syncDueWrap);
   });
 
   const add = (): void => {

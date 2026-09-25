@@ -319,13 +319,23 @@ fn kind_rank(kind: Kind) -> u8 {
     }
 }
 
-/// 列表顺序合同：限时（到期日升序，今天到期在最前）> 不限时 > 每日；同类内按创建先后。
+/// 列表顺序合同（2026-09-25 业主修订）：
+/// 未完成：限时（到期日升序）> 不限时 > 每日，同类内按创建先后；
+/// 已完成（不分类型）恒排最后，内部按完成先后（done_date 升序）。
 pub fn sorted_tasks(db: &Database) -> Vec<&Task> {
     let mut v: Vec<&Task> = db.tasks.iter().collect();
+    let rank = |t: &Task| {
+        if t.done_date.is_some() {
+            3
+        } else {
+            kind_rank(t.kind)
+        }
+    };
     v.sort_by(|a, b| {
-        kind_rank(a.kind)
-            .cmp(&kind_rank(b.kind))
+        rank(a)
+            .cmp(&rank(b))
             .then_with(|| a.due_date.cmp(&b.due_date))
+            .then_with(|| a.done_date.cmp(&b.done_date))
             .then_with(|| a.created_date.cmp(&b.created_date))
     });
     v
@@ -469,7 +479,7 @@ mod tests {
         assert_eq!(db.archive[0].outcome, Outcome::CompletedOn);
     }
 
-    // ── B6 排序 ──────────────────────────────────
+    // ── B6 排序（2026-09-25 修订：已完成恒最后，按完成顺序） ──
     #[test]
     fn b6_order_limited_by_due_then_open_then_daily_stable() {
         let mut db = new_database();
@@ -491,6 +501,51 @@ mod tests {
                 daily.as_str()
             ]
         );
+    }
+
+    #[test]
+    fn b6_done_tasks_sink_to_bottom_ordered_by_completion() {
+        let mut db = new_database();
+        let d1 = add_task(&mut db, base(), "每日", Kind::Daily, None).unwrap();
+        let o1 = add_task(&mut db, base(), "不限时", Kind::Open, None).unwrap();
+        let l1 = add_task(&mut db, base(), "限时", Kind::Limited, Some(base())).unwrap();
+        // 同日完成的先后无法区分（done_date 是天粒度），同日内按创建顺序兜底
+        toggle_done(&mut db, base(), &o1).unwrap();
+        toggle_done(&mut db, base(), &d1).unwrap();
+        toggle_done(&mut db, base(), &l1).unwrap();
+
+        let view = build_view(&db, base());
+        let ids: Vec<&str> = view.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(ids, vec![d1.as_str(), o1.as_str(), l1.as_str()]);
+
+        // 跨天完成：先完成的排前面
+        let mut db2 = new_database();
+        let a = add_task(&mut db2, base(), "先完成", Kind::Open, None).unwrap();
+        let b = add_task(&mut db2, base(), "后完成", Kind::Open, None).unwrap();
+        toggle_done(&mut db2, base(), &b).unwrap();
+        roll_over(&mut db2, base().succ_opt().unwrap());
+        // b 在 24 日勾选、25 日被归档清除了——改为直接构造完成日期差异
+        let mut db3 = new_database();
+        let c1 = add_task(&mut db3, base(), "C", Kind::Open, None).unwrap();
+        let c2 = add_task(&mut db3, base(), "D", Kind::Open, None).unwrap();
+        toggle_done(&mut db3, base(), &c2).unwrap();
+        let t = db3.tasks.iter_mut().find(|t| t.id == c1).unwrap();
+        t.done_date = Some(base().pred_opt().unwrap()); // 前一天完成（补偿场景）
+        let view = build_view(&db3, base());
+        assert_eq!(view[0].id, c1, "更早完成的排更前");
+    }
+
+    #[test]
+    fn b6_undone_come_before_done_across_kinds() {
+        let mut db = new_database();
+        let done_daily = add_task(&mut db, base(), "已完成每日", Kind::Daily, None).unwrap();
+        toggle_done(&mut db, base(), &done_daily).unwrap();
+        let undone_limited =
+            add_task(&mut db, base(), "未完成限时", Kind::Limited, Some(d(2026, 10, 1))).unwrap();
+
+        let view = build_view(&db, base());
+        assert_eq!(view[0].id, undone_limited, "未完成限时优先于已完成每日");
+        assert_eq!(view[1].id, done_daily);
     }
 
     // ── B7 类型修改 ──────────────────────────────

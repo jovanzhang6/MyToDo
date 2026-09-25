@@ -55,10 +55,13 @@ pub fn set_corner_preference(hwnd_raw: *mut core::ffi::c_void, round: bool) {
 /// 展开=球窗当前位置显示主窗（尺寸取 pre_ball，出屏钳位）。两窗口尺寸终生不变，
 /// 规避同窗口变形与 DWM/阴影/最小尺寸/WebView 重排的全部竞态。
 pub fn switch_ball_mode(app: &AppHandle, on: bool) {
+    eprintln!("[球] switch_ball_mode 进入 on={on}");
     let Some(main) = app.get_webview_window("main") else {
+        eprintln!("[球] 主窗不存在！");
         return;
     };
     let Some(ball) = app.get_webview_window("ball") else {
+        eprintln!("[球] 球窗不存在！");
         return;
     };
     let state = app.state::<AppState>();
@@ -114,6 +117,7 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
         let _ = main.show();
         let _ = main.set_focus();
         let _ = ball.hide();
+        eprintln!("[球] 展开步骤全部完成");
         {
             let mut db = state.db.lock().unwrap();
             if let Some(w) = db.window.as_mut() {

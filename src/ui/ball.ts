@@ -34,9 +34,12 @@ export function initBall(): void {
       const onUp = () => {
         cleanup();
         if (!dragging) {
-          invoke("set_ball_mode", { on: false }).catch((err) =>
-            showTip(String(err))
-          );
+          invoke("set_ball_mode", { on: false })
+            .then(() => invoke("log_frontend", { msg: "[球窗] 展开invoke成功" }).catch(() => {}))
+            .catch((err) => {
+              invoke("log_frontend", { msg: `[球窗] 展开invoke失败: ${err}` }).catch(() => {});
+              showTip(String(err));
+            });
         }
       };
       const cleanup = () => {

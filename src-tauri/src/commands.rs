@@ -192,7 +192,8 @@ pub fn set_reminders_enabled(app: AppHandle, on: bool) -> Result<(), String> {
     }
     crate::store::save(&state.db.lock().unwrap(), &state.path)
         .map_err(|e| format!("保存失败：{e}"))?;
-    Ok(())
+    // 广播状态变更：设置页的联动灰显等 UI 依赖它即时同步（否则要等窗口焦点触发 refresh）
+    app.emit("state-changed", ()).map_err(|e| e.to_string())
 }
 
 /// 开机自启开关（设置页；状态以系统注册态为唯一事实源）。
@@ -205,7 +206,8 @@ pub fn set_autostart(app: AppHandle, on: bool) -> Result<(), String> {
     } else {
         launcher.disable()
     };
-    result.map_err(|e| format!("设置开机自启失败：{e}"))
+    result.map_err(|e| format!("设置开机自启失败：{e}"))?;
+    app.emit("state-changed", ()).map_err(|e| e.to_string())
 }
 
 /// 积压告警阈值（1–30 天，越界收敛）。
@@ -219,6 +221,7 @@ pub fn set_backlog_days(app: AppHandle, days: u32) -> Result<u32, String> {
     }
     crate::store::save(&state.db.lock().unwrap(), &state.path)
         .map_err(|e| format!("保存失败：{e}"))?;
+    app.emit("state-changed", ()).map_err(|e| e.to_string())?;
     Ok(clamped)
 }
 

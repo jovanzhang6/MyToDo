@@ -80,12 +80,17 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
         }
         let _ = window.set_resizable(false);
         let _ = window.set_size(tauri::PhysicalSize::new(BALL_SIZE, BALL_SIZE));
+        let s1 = window.outer_size().map(|s| (s.width, s.height));
         // 关掉 Tauri 阴影：其 Windows 实现（DWM 边框扩展）会在球周围留下玻璃圆角边框，
         // 且边框会计入 outer_size 造成几何逐轮膨胀
         let _ = window.set_shadow(false);
+        let s2 = window.outer_size().map(|s| (s.width, s.height));
         // 关掉 Win11 系统自动圆角（否则 64px 小窗被切角成不规则椭圆）
         #[cfg(target_os = "windows")]
         set_corner_preference(hwnd_raw, false);
+        // 终末纠偏：任何一步偷偷改了尺寸，这里强制扳回 64×64
+        let _ = window.set_size(tauri::PhysicalSize::new(BALL_SIZE, BALL_SIZE));
+        let s3 = window.outer_size().map(|s| (s.width, s.height));
         // 清材质：让窗口四角真正透明（露桌面而非灰 Acrylic）；失败必须可见
         #[cfg(target_os = "windows")]
         {
@@ -97,7 +102,18 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
             }
         }
         let actual = window.outer_size().map(|s| (s.width, s.height));
-        eprintln!("[球] 收球后实际尺寸={actual:?}（应为 64×64，若更大说明仍有注入）");
+        eprintln!(
+            "[球] 收球分步 set_size后={s1:?} 阴影关后={s2:?} 纠偏后={s3:?} 最终={actual:?}"
+        );
+        // 延迟二次纠偏：击败 100ms 内的任何异步重设（延迟者多为前端/系统动画）
+        let win = window.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            let before = win.outer_size().map(|s| (s.width, s.height));
+            let _ = win.set_size(tauri::PhysicalSize::new(BALL_SIZE, BALL_SIZE));
+            let after = win.outer_size().map(|s| (s.width, s.height));
+            eprintln!("[球] 延迟纠偏 前={before:?} 后={after:?}");
+        });
         eprintln!(
             "[球] 收球 pre=({},{},{},{})",
             pos.x, pos.y, size.width, size.height

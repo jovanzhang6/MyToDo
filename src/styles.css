@@ -348,6 +348,11 @@ body {
   white-space: nowrap;
 }
 
+/* 作者 display 会压过 UA 的 [hidden]，必须显式声明（否则截止组永远显示） */
+#due-wrap[hidden] {
+  display: none !important;
+}
+
 #due-date {
   width: 104px;
   border: 1px solid rgba(120, 150, 180, 0.4);

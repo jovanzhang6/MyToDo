@@ -83,9 +83,15 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
         }
         let _ = ball.set_position(PhysicalPosition::new(pos.x, pos.y));
         let _ = ball.show();
+        // 显示时强制重设尺寸并记录：创建时的 64×64 逻辑宽被某处撑到 135（实测），此处钳回
+        let _ = ball.set_size(tauri::LogicalSize::new(64.0, 64.0));
         let _ = main.hide();
         let bsize = ball.outer_size().map(|s| (s.width, s.height));
-        eprintln!("[球] 收球 主窗隐藏，球就位 ({},{}) 球窗实际尺寸={:?}", pos.x, pos.y, bsize);
+        let bscale = ball.scale_factor().unwrap_or(1.0);
+        eprintln!(
+            "[球] 收球 主窗隐藏，球就位 ({},{}) 球窗尺寸={bsize:?} scale={bscale}",
+            pos.x, pos.y
+        );
     } else {
         // 主窗在球的当前位置展开；出屏钳位（球贴边时展开不越过屏幕）
         let ball_pos = ball.outer_position().unwrap_or_default();

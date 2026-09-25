@@ -48,6 +48,16 @@ export type Refresh = () => Promise<void>;
 const cur = getCurrentWindow();
 type RzDir = Parameters<typeof cur.startResizeDragging>[0];
 
+const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+/** 标题栏日期："9月25日 周五"（今日语境，为每日任务与完成率提供时间锚点） */
+function renderTitleDate(today: string): void {
+  const [y, m, d] = today.split("-").map(Number);
+  const weekday = WEEKDAYS[new Date(y, m - 1, d).getDay()];
+  const el = document.getElementById("app-title");
+  if (el) el.textContent = `${m}月${d}日 ${weekday}`;
+}
+
 // 黑匣子：任何前端错误实时打进 Rust 日志（.tauri-dev.log），同时在窗口 tip 里可见。
 // 带时间戳（区分新旧错误）且 6 秒自动清空（避免残影被当成新错误）。
 let tipTimer: number | undefined;
@@ -78,6 +88,7 @@ export async function refresh(): Promise<void> {
     renderStats(state);
     renderSettings(state);
     renderBall(state);
+    renderTitleDate(state.today);
   } catch (e) {
     console.error("get_state 失败", e);
   }

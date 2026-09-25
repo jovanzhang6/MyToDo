@@ -53,6 +53,9 @@ pub struct WindowState {
     /// 玻璃层不透明度 0.10–0.95；None = 默认 0.5。P1 透明度滑杆随用户要求提前落地。
     #[serde(default)]
     pub opacity: Option<f32>,
+    /// 悬浮球模式（球是临时态，落盘时强制 false + 剥离 pre_ball，F6）
+    #[serde(default)]
+    pub ball_mode: bool,
 }
 
 /// 一天的任务快照（计数制）：roll_over 关闭该天前记录。
@@ -80,6 +83,9 @@ pub struct Database {
     /// 每日任务逐日快照（切片 2 新增，旧数据文件 default 兼容）
     #[serde(default)]
     pub daily_log: Vec<DailyLogEntry>,
+    /// 收球前的窗口几何（悬浮球临时态，落盘时剥离）
+    #[serde(default)]
+    pub pre_ball: Option<WindowState>,
     /// 到期提醒：最近一次发送的自然日（同任务同天至多一次的依据）
     #[serde(default)]
     pub last_notified_date: Option<NaiveDate>,
@@ -107,6 +113,7 @@ pub fn new_database() -> Database {
         archive: Vec::new(),
         window: None,
         daily_log: Vec::new(),
+        pre_ball: None,
         last_notified_date: None,
         reminders_enabled: true,
         backlog_days: 3,

@@ -11,6 +11,9 @@
       <header id="titlebar">
         <span id="app-title">MyToDo</span>
         <span id="tb-buttons">
+          <button id="btn-ball" class="tb-btn" title="收成悬浮球" aria-label="收成悬浮球">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>
+          </button>
           <button id="btn-stats" class="tb-btn" title="统计" aria-label="统计">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
           </button>
@@ -140,6 +143,12 @@
         <div class="stat-row"><span>累计归档</span><b id="stat-archive">0</b></div>
         <div id="stat-trend"></div>
       </div>
+      <div id="view-ball" class="view" hidden>
+        <div id="ball" data-tauri-drag-region>
+          <span id="ball-count">0</span>
+        </div>
+      </div>
+
       <div id="resize-strip-n" class="rz rz-n" data-dir="North"></div>
       <div id="resize-strip-s" class="rz rz-s" data-dir="South"></div>
       <div id="resize-strip-e" class="rz rz-e" data-dir="East"></div>

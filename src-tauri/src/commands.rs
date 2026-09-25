@@ -27,6 +27,7 @@ pub struct StateDto {
     pub reminders_enabled: bool,
     pub backlog_days: u32,
     pub autostart_enabled: bool,
+    pub ball_mode: bool,
     pub stats: crate::stats::StatsDto,
 }
 
@@ -62,6 +63,7 @@ pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
         today,
         tasks: todo::build_view(&db, today),
         always_on_top: todo::always_on_top(&db),
+        ball_mode: db.window.map_or(false, |w| w.ball_mode),
         glass_opacity: db.window.and_then(|w| w.opacity).unwrap_or(0.5),
         reminders_enabled: db.reminders_enabled,
         backlog_days: db.backlog_days,
@@ -223,6 +225,38 @@ pub fn set_backlog_days(app: AppHandle, days: u32) -> Result<u32, String> {
         .map_err(|e| format!("保存失败：{e}"))?;
     app.emit("state-changed", ()).map_err(|e| e.to_string())?;
     Ok(clamped)
+}
+
+/// 悬浮球模式切换：on=记录当前几何并收成球；off=恢复收球前几何。
+/// 球态不落盘（store::save 统一剥离），强杀重启必为展开态。
+#[tauri::command]
+pub fn set_ball_mode(app: AppHandle, window: WebviewWindow, on: bool) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    {
+        let mut db = state.db.lock().unwrap();
+        if on {
+            let ws = *db.window.get_or_insert_with(Default::default);
+            if !ws.ball_mode {
+                // 记录收球前的几何（Database 级字段，落盘时剥离）
+                db.pre_ball = Some(ws);
+            }
+            db.window = Some(WindowState {
+                ball_mode: true,
+                ..ws
+            });
+        } else {
+            if let Some(pre) = db.pre_ball.take() {
+                db.window = Some(pre);
+            }
+            if let Some(w) = db.window.as_mut() {
+                w.ball_mode = false;
+            }
+        }
+    }
+    drop(state);
+    crate::window::apply_ball_geometry(&app, &window, on);
+    // 广播让前端切视图（球视图/清单视图）
+    app.emit("state-changed", ()).map_err(|e| e.to_string())
 }
 
 static HIDE_TIP_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

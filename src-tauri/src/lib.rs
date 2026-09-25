@@ -71,6 +71,7 @@ pub fn run() {
             commands::set_reminders_enabled,
             commands::set_backlog_days,
             commands::set_autostart,
+            commands::set_ball_mode,
             commands::log_frontend,
             commands::hide_window
         ])

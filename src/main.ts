@@ -6,6 +6,7 @@ import { renderList } from "./ui/list";
 import { initAddbar } from "./ui/addbar";
 import { renderStats } from "./ui/stats";
 import { initSettingsPage, renderSettings } from "./ui/settings";
+import { initBall, renderBall } from "./ui/ball";
 
 export interface TaskView {
   id: string;
@@ -34,6 +35,7 @@ export interface StateDto {
   today: string;
   tasks: TaskView[];
   always_on_top: boolean;
+  ball_mode: boolean;
   glass_opacity: number;
   reminders_enabled: boolean;
   backlog_days: number;
@@ -75,6 +77,7 @@ export async function refresh(): Promise<void> {
     setPin(state.always_on_top);
     renderStats(state);
     renderSettings(state);
+    renderBall(state);
   } catch (e) {
     console.error("get_state 失败", e);
   }
@@ -114,6 +117,7 @@ async function init(): Promise<void> {
   initTitlebar(cur);
   initAddbar(refresh);
   initSettingsPage();
+  initBall();
   await listen("state-changed", refresh);
   window.addEventListener("focus", refresh);
   await refresh();

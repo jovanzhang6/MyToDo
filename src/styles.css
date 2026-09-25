@@ -400,7 +400,7 @@ body {
   min-height: 15px;
 }
 
-/* ── 视图切换（清单页 / 统计页） ──────────────── */
+/* ── 视图切换（清单 / 统计 / 设置 / 悬浮球） ───── */
 .view {
   display: flex;
   flex-direction: column;
@@ -410,6 +410,42 @@ body {
 
 .view[hidden] {
   display: none !important;
+}
+
+/* 悬浮球模式：窗口本身变正圆 */
+body.ball-mode #app {
+  border-radius: 50%;
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 6px 20px rgba(80, 120, 180, 0.4);
+}
+
+#view-ball {
+  align-items: center;
+  justify-content: center;
+}
+
+#ball {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+#ball-count {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+#ball.ball-done {
+  background: radial-gradient(circle at 35% 30%, rgba(88, 169, 66, 0.35), transparent 70%);
+}
+
+#ball.ball-done #ball-count {
+  color: #58a942;
 }
 
 /* ── 统计整页 ────────────────────────────────── */

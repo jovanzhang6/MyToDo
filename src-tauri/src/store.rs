@@ -32,8 +32,16 @@ pub fn save(db: &Database, path: &Path) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
+    // 悬浮球是临时态：落盘前剥离（强杀/重启后必为展开态，F6）
+    let mut persisted = db.clone();
+    if persisted.window.as_ref().map_or(false, |w| w.ball_mode) {
+        if let Some(w) = persisted.window.as_mut() {
+            w.ball_mode = false;
+        }
+        persisted.pre_ball = None;
+    }
     let tmp = path.with_extension("json.tmp");
-    let raw = serde_json::to_string_pretty(db).map_err(io::Error::other)?;
+    let raw = serde_json::to_string_pretty(&persisted).map_err(io::Error::other)?;
     fs::write(&tmp, raw)?;
     // Windows 上 std::fs::rename 使用 MOVEFILE_REPLACE_EXISTING，可覆盖已存在文件
     fs::rename(&tmp, path)
@@ -80,5 +88,43 @@ mod tests {
         let db = load(&dir.path().join("none.json")).unwrap();
         assert_eq!(db.tasks.len(), 0);
         assert_eq!(db.schema_version, SCHEMA_VERSION);
+    }
+
+    // ── 悬浮球态不落盘（F6） ──────────────────────
+    #[test]
+    fn ball_mode_is_stripped_on_save() {
+        use crate::todo::{Database, WindowState};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        let mut db = Database {
+            window: Some(WindowState {
+                x: 100,
+                y: 200,
+                width: 56,
+                height: 56,
+                always_on_top: true,
+                opacity: Some(0.35),
+                ball_mode: true,
+            }),
+            pre_ball: Some(WindowState {
+                x: 10,
+                y: 20,
+                width: 300,
+                height: 520,
+                always_on_top: true,
+                opacity: None,
+                ball_mode: false,
+            }),
+            ..new_database()
+        };
+        add_task(&mut db, today(), "任务", Kind::Open, None).unwrap();
+        save(&db, &path).unwrap();
+        let loaded = load(&path).unwrap();
+        let w = loaded.window.unwrap();
+        assert!(!w.ball_mode, "球态不落盘");
+        assert!(loaded.pre_ball.is_none(), "pre_ball 一并剥离");
+        assert_eq!((w.x, w.y, w.width, w.height), (100, 200, 56, 56));
+        assert_eq!(w.opacity, Some(0.35), "其余字段原样保留");
+        assert_eq!(loaded.tasks.len(), 1);
     }
 }

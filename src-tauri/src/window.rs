@@ -28,6 +28,39 @@ pub fn apply_startup_geometry(app: &AppHandle, window: &WebviewWindow) {
     let _ = window.set_always_on_top(on_top);
 }
 
+/// 悬浮球几何：56×56 圆球。收球时先关 resizable（绕过 conf 最小尺寸约束）再 set_size；
+/// 展球恢复 pre_ball 几何并重新开启缩放。程序性 set_size 不受 resizable 限制。
+pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
+    let target = {
+        let state = app.state::<AppState>();
+        let db = state.db.lock().unwrap();
+        let ws = db.window.unwrap_or_default();
+        if on {
+            (ws.x, ws.y, BALL_SIZE, BALL_SIZE)
+        } else {
+            match db.pre_ball {
+                Some(pre) => (pre.x, pre.y, pre.width, pre.height),
+                None => (ws.x, ws.y, DEFAULT_W, DEFAULT_H),
+            }
+        }
+    };
+    if on {
+        let _ = window.set_resizable(false);
+        let _ = window.set_size(tauri::PhysicalSize::new(target.2, target.3));
+        let _ = window.set_position(PhysicalPosition::new(target.0, target.1));
+    } else {
+        let _ = window.set_resizable(true);
+        if target.2 > 0 {
+            let _ = window.set_size(tauri::PhysicalSize::new(target.2, target.3));
+        }
+        let _ = window.set_position(PhysicalPosition::new(target.0, target.1));
+    }
+}
+
+pub const BALL_SIZE: u32 = 56;
+const DEFAULT_W: u32 = 300;
+const DEFAULT_H: u32 = 520;
+
 /// 淡蓝磨砂：Acrylic 真材质，透明度直接由 tint alpha 承载（滑杆实时可调、可看穿）。
 /// 注意：Windows 的 Acrylic 在窗口失焦时材质会略微变实，这是系统级行为。
 /// Acrylic 不可用时退回 Mica（此时滑杆只能影响 CSS 叠层），最终兜底纯 CSS 半透明。
@@ -73,9 +106,13 @@ pub fn watch_geometry(app: &AppHandle, window: &WebviewWindow) {
 }
 
 /// 只更新几何，其余字段（置顶、透明度）保留现值，避免拖动把它们冲掉。
+/// 球模式下跳过：球的 56px 几何绝不能覆盖展开态记忆（F6）。
 fn persist_geometry(handle: &AppHandle, pos: (i32, i32), size: (u32, u32)) {
     let state = handle.state::<AppState>();
     let mut db = state.db.lock().unwrap();
+    if db.window.map_or(false, |w| w.ball_mode) {
+        return;
+    }
     let mut ws = db.window.unwrap_or_default();
     ws.x = pos.0;
     ws.y = pos.1;

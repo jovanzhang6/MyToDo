@@ -66,7 +66,7 @@ pub fn run() {
                 WebviewUrl::App("index.html?view=ball".into()),
             )
             .title("MyToDo")
-            .inner_size(64.0, 64.0)
+            .inner_size(56.0, 56.0)
             .decorations(false)
             .transparent(true)
             .resizable(false)

@@ -84,7 +84,7 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
         let _ = ball.set_position(PhysicalPosition::new(pos.x, pos.y));
         let _ = ball.show();
         // 显示时强制重设尺寸并记录：创建时的 64×64 逻辑宽被某处撑到 135（实测），此处钳回
-        let _ = ball.set_size(tauri::LogicalSize::new(64.0, 64.0));
+        let _ = ball.set_size(tauri::LogicalSize::new(56.0, 56.0));
         let _ = main.hide();
         let bsize = ball.outer_size().map(|s| (s.width, s.height));
         let bscale = ball.scale_factor().unwrap_or(1.0);

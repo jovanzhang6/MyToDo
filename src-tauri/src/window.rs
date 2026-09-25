@@ -50,6 +50,11 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
                 ball_mode: false,
             };
             db.pre_ball = Some(pre);
+            // 前端据此切换球视图（漏掉这行 = 窗口缩了但界面还在清单态）
+            db.window = Some(WindowState {
+                ball_mode: true,
+                ..ws
+            });
         }
         let _ = window.set_resizable(false);
         let _ = window.set_size(tauri::PhysicalSize::new(BALL_SIZE, BALL_SIZE));

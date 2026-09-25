@@ -11,6 +11,8 @@ export const IS_BALL_WINDOW = cur.label === "ball";
 export function initBall(): void {
   if (IS_BALL_WINDOW) {
     document.body.classList.add("ball-window");
+    // 球窗里球视图常驻（HTML 自带 hidden 属性，必须显式摘掉）
+    document.getElementById("view-ball")!.hidden = false;
     // 球窗：按住位移 ≤4px = 点击展开；超阈值 = 交给系统拖拽
     const ball = document.getElementById("ball")!;
     let sx = 0;

@@ -76,10 +76,11 @@ pub fn run() {
             .visible(false)
             .build()?;
             #[cfg(target_os = "windows")]
-            window::set_corner_preference(
-                ball.hwnd().map(|h| h.0).unwrap_or(std::ptr::null_mut()),
-                false,
-            );
+            {
+                let hwnd = ball.hwnd().map(|h| h.0).unwrap_or(std::ptr::null_mut());
+                window::set_corner_preference(hwnd, false);
+                window::set_border_none(hwnd);
+            }
             let _ = ball;
 
             Ok(())

@@ -51,6 +51,23 @@ pub fn set_corner_preference(hwnd_raw: *mut core::ffi::c_void, round: bool) {
     }
 }
 
+/// Win11 给所有窗口画 1px 系统边框（白背景上悬浮球的"灰色圆角框"就是它）——
+/// 球窗显式把边框颜色设为 NONE（DWMWA_COLOR_NONE）。
+#[cfg(target_os = "windows")]
+pub fn set_border_none(hwnd_raw: *mut core::ffi::c_void) {
+    use windows::Win32::Foundation::{COLORREF, HWND};
+    use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
+    let none = COLORREF(0xFFFF_FFFE);
+    unsafe {
+        let _ = DwmSetWindowAttribute(
+            HWND(hwnd_raw),
+            DWMWA_BORDER_COLOR,
+            &none as *const _ as *const core::ffi::c_void,
+            std::mem::size_of::<COLORREF>() as u32,
+        );
+    }
+}
+
 /// 悬浮球切换（独立球窗口架构）：收球=主窗隐藏+球窗显示（就地出现）；
 /// 展开=球窗当前位置显示主窗（尺寸取 pre_ball，出屏钳位）。两窗口尺寸终生不变，
 /// 规避同窗口变形与 DWM/阴影/最小尺寸/WebView 重排的全部竞态。

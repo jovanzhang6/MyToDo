@@ -58,6 +58,9 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
         }
         let _ = window.set_resizable(false);
         let _ = window.set_size(tauri::PhysicalSize::new(BALL_SIZE, BALL_SIZE));
+        // 关掉 Tauri 阴影：其 Windows 实现（DWM 边框扩展）会在球周围留下玻璃圆角边框，
+        // 且边框会计入 outer_size 造成几何逐轮膨胀
+        let _ = window.set_shadow(false);
         // 清材质：让窗口四角真正透明（露桌面而非灰 Acrylic）；失败必须可见
         #[cfg(target_os = "windows")]
         {
@@ -68,6 +71,8 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
                 eprintln!("[球] clear_mica 失败: {e:?}");
             }
         }
+        let actual = window.outer_size().map(|s| (s.width, s.height));
+        eprintln!("[球] 收球后实际尺寸={actual:?}（应为 64×64，若更大说明仍有注入）");
         eprintln!(
             "[球] 收球 pre=({},{},{},{})",
             pos.x, pos.y, size.width, size.height
@@ -94,6 +99,7 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
             }
         };
         let _ = window.set_resizable(true);
+        let _ = window.set_shadow(true);
         let _ = window.set_size(tauri::PhysicalSize::new(target.2, target.3));
         let _ = window.set_position(PhysicalPosition::new(target.0, target.1));
         apply_blur(window, target.4.unwrap_or(0.5));

@@ -419,8 +419,12 @@ body {
   border-radius: 8px;
   background: var(--accent);
   color: #fff;
-  font-size: 17px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 0;
 }
 
 #btn-add:hover {

@@ -49,15 +49,18 @@ export function initBall(): void {
   });
 }
 
-/** refresh 回流：根据 ball_mode 切视图、刷新球面数字与全绿态 */
+/** refresh 回流：根据 ball_mode 切视图、刷新球面（进度环 + 未完成数 + 全绿态） */
 export function renderBall(state: StateDto): void {
   if (state.ball_mode) {
     showView("ball");
-    const undone = state.stats.today_total - state.stats.today_done;
+    const { today_done, today_total } = state.stats;
+    const undone = today_total - today_done;
+    const pct = today_total === 0 ? 0 : Math.round((today_done / today_total) * 100);
     const ball = document.getElementById("ball")!;
-    const count = document.getElementById("ball-count")!;
-    count.textContent = undone > 99 ? "99+" : String(undone);
-    const allDone = state.stats.today_total > 0 && undone === 0;
+    ball.style.setProperty("--p", `${pct}%`);
+    document.getElementById("ball-count")!.textContent =
+      undone > 99 ? "99+" : String(undone);
+    const allDone = today_total > 0 && undone === 0;
     ball.classList.toggle("ball-done", allDone);
   } else if (document.getElementById("view-ball")!.hidden === false) {
     showView("list"); // 从球展开：回清单视图（几何恢复由后端完成）

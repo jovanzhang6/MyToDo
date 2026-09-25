@@ -7,9 +7,10 @@ use crate::todo::WindowState;
 
 /// 启动时应用几何：有记忆（且尺寸合法）用记忆，否则主屏右上角留边；置顶按记忆。
 pub fn apply_startup_geometry(app: &AppHandle, window: &WebviewWindow) {
-            let saved = app.state::<AppState>().db.lock().unwrap().window;
+    let saved = app.state::<AppState>().db.lock().unwrap().window;
     match saved {
-        Some(ws) if ws.width > 0 && ws.height > 0 => {
+        // 几何自愈：过小视为历史球态污染，走默认右上角
+        Some(ws) if ws.width >= MIN_VALID_W && ws.height > 0 => {
             let _ = window.set_position(PhysicalPosition::new(ws.x, ws.y));
             let _ = window.set_size(tauri::PhysicalSize::new(ws.width, ws.height));
         }
@@ -39,8 +40,11 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
             (ws.x, ws.y, BALL_SIZE, BALL_SIZE)
         } else {
             match db.pre_ball {
-                Some(pre) => (pre.x, pre.y, pre.width, pre.height),
-                None => (ws.x, ws.y, DEFAULT_W, DEFAULT_H),
+                // 几何自愈：pre_ball 异常小（历史污染）时回退默认展开尺寸
+                Some(pre) if pre.width >= MIN_VALID_W => {
+                    (pre.x, pre.y, pre.width, pre.height)
+                }
+                _ => (ws.x, ws.y, DEFAULT_W, DEFAULT_H),
             }
         }
     };
@@ -54,8 +58,13 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
             let _ = window.set_size(tauri::PhysicalSize::new(target.2, target.3));
         }
         let _ = window.set_position(PhysicalPosition::new(target.0, target.1));
+        // 展开后立即把恢复的几何写为当前记忆（自愈：覆盖任何历史污染）
+        persist_geometry(app, (target.0, target.1), (target.2, target.3));
     }
 }
+
+/// 展开态几何的合法下限：小于它视为球态污染，走默认值自愈
+pub const MIN_VALID_W: u32 = 150;
 
 pub const BALL_SIZE: u32 = 64;
 const DEFAULT_W: u32 = 300;

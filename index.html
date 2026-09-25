@@ -11,19 +11,19 @@
       <header id="titlebar">
         <span id="app-title">MyToDo</span>
         <span id="tb-buttons">
-          <button id="btn-ball" class="tb-btn" title="收成悬浮球" aria-label="收成悬浮球">
+          <button id="btn-ball" class="tb-btn" data-tip="收成悬浮球" aria-label="收成悬浮球">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>
           </button>
-          <button id="btn-stats" class="tb-btn" title="统计" aria-label="统计">
+          <button id="btn-stats" class="tb-btn" data-tip="统计" aria-label="统计">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
           </button>
-          <button id="btn-settings" class="tb-btn" title="设置" aria-label="设置">
+          <button id="btn-settings" class="tb-btn" data-tip="设置" aria-label="设置">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h8M18 7h2M4 17h2M12 17h8"/><circle cx="15" cy="7" r="2.5"/><circle cx="9" cy="17" r="2.5"/></svg>
           </button>
-          <button id="btn-pin" class="tb-btn" title="置顶开关" aria-label="置顶开关">
+          <button id="btn-pin" class="tb-btn" data-tip="置顶开关" aria-label="置顶开关">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16.5V21"/><path d="M9 3.5h6l-.8 6.8 2.8 2.9v1.8H7v-1.8l2.8-2.9L9 3.5z"/></svg>
           </button>
-          <button id="btn-close" class="tb-btn" title="隐藏到托盘" aria-label="隐藏到托盘">
+          <button id="btn-close" class="tb-btn" data-tip="隐藏到托盘" aria-label="隐藏到托盘">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
           </button>
         </span>
@@ -145,7 +145,10 @@
       </div>
       <div id="view-ball" class="view" hidden>
         <div id="ball">
-          <span id="ball-count">0</span>
+          <div id="ball-core">
+            <span id="ball-count">0</span>
+            <small>待办</small>
+          </div>
         </div>
       </div>
 

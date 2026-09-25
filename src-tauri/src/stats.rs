@@ -1,7 +1,7 @@
 //! 统计：全部纯函数、只读 Database。按 PM 三问组织：
 //! ① 今日怎么样 → summary（done/total/remaining）
 //! ② 我在坚持吗 → streak（当前+最长）+ 30 天热力图（全任务口径）
-//! ③ 管理健康吗 → 按期完成率（限时归档）+ 积压告警（不限时躺 ≥BACKLOG_DAYS 天未动）
+//! ③ 管理健康吗 → 按期完成率（限时归档）+ 积压告警（不限时躺 ≥db.backlog_days 天未动）
 //! None 语义 = 前置条件不存在（无该类任务/无每日任务），与 0 是两回事。
 
 use chrono::NaiveDate;
@@ -9,8 +9,6 @@ use serde::Serialize;
 
 use crate::todo::{Database, Kind, Outcome};
 
-/// 不限时任务躺够几天算积压（PM 口径：3 天没动就该处理）
-const BACKLOG_DAYS: i64 = 3;
 const HEATMAP_DAYS: u32 = 30;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -75,13 +73,13 @@ pub fn compute_stats(db: &Database, today: NaiveDate) -> StatsDto {
         Some(on_time as f32 / limited_archive.len() as f32)
     };
 
-    // 积压：不限时、未完成、创建 ≥3 天
+    // 积压：不限时、未完成、未动够阈值天数（阈值用户可在设置页调）
     let backlog: Vec<u32> = db
         .tasks
         .iter()
         .filter(|t| t.kind == Kind::Open && t.done_date.is_none())
         .map(|t| (today - t.created_date).num_days().max(0) as u32)
-        .filter(|age| *age as i64 >= BACKLOG_DAYS)
+        .filter(|age| *age >= db.backlog_days)
         .collect();
     let oldest_backlog_days = backlog.iter().max().copied();
 
@@ -314,6 +312,20 @@ mod tests {
             HeatDay { date: d(2026, 9, 26), done: 0, total: 2 },
             "今天=实时口径：两个限时任务均已归档离场，在册=躺着的+新任务，未勾"
         );
+    }
+
+    // ── 阈值可调：backlog_days=1 时昨天创建未动就算积压 ──
+    #[test]
+    fn backlog_threshold_is_configurable() {
+        let mut db = new_database();
+        add_task(&mut db, d(2026, 9, 25), "昨天建的", Kind::Open, None).unwrap();
+        let s = compute_stats(&db, d(2026, 9, 26));
+        assert_eq!(s.backlog_count, 0, "默认阈值 3 天：1 天不算积压");
+
+        db.backlog_days = 1;
+        let s2 = compute_stats(&db, d(2026, 9, 26));
+        assert_eq!(s2.backlog_count, 1);
+        assert_eq!(s2.oldest_backlog_days, Some(1));
     }
 
     // ── 纯函数无副作用 ──────────────────────────────

@@ -22,6 +22,12 @@ export function initSettingsPage(): void {
 
   wireToggle("reminders-toggle", "set_reminders_enabled", "on");
   wireToggle("autostart-toggle", "set_autostart", "on");
+
+  // 积压阈值步进（1–30 天）；提醒关闭时整行灰显不可用
+  const minus = document.getElementById("backlog-minus") as HTMLButtonElement;
+  const plus = document.getElementById("backlog-plus") as HTMLButtonElement;
+  minus.addEventListener("click", () => stepBacklog(-1));
+  plus.addEventListener("click", () => stepBacklog(1));
   document.getElementById("pin-toggle")!.addEventListener("change", (e) => {
     const on = (e.target as HTMLInputElement).checked;
     invoke("set_always_on_top", { on }).catch((err) => showTip(String(err)));
@@ -39,6 +45,7 @@ function wireToggle(id: string, cmd: string, argName: string): void {
 export function renderSettings(state: {
   glass_opacity: number;
   reminders_enabled: boolean;
+  backlog_days: number;
   autostart_enabled: boolean;
 }): void {
   const slider = document.getElementById("opacity-slider") as HTMLInputElement;
@@ -53,4 +60,26 @@ export function renderSettings(state: {
   (
     document.getElementById("autostart-toggle") as HTMLInputElement
   ).checked = state.autostart_enabled;
+  syncBacklogRow(state.backlog_days, state.reminders_enabled);
+}
+
+function syncBacklogRow(days: number, remindersOn: boolean): void {
+  document.getElementById("backlog-value")!.textContent = String(days);
+  (
+    document.getElementById("backlog-desc") as HTMLElement
+  ).textContent = `不限时任务躺 ${days} 天未动时在统计页告警`;
+  document.getElementById("backlog-row")!.classList.toggle("disabled", !remindersOn);
+}
+
+async function stepBacklog(delta: number): Promise<void> {
+  const valueEl = document.getElementById("backlog-value")!;
+  const next = Math.min(30, Math.max(1, Number(valueEl.textContent) + delta));
+  if (String(next) === valueEl.textContent) return;
+  valueEl.textContent = String(next); // 即时反馈，失败由回流纠正
+  try {
+    const v = await invoke<number>("set_backlog_days", { days: next });
+    valueEl.textContent = String(v);
+  } catch (err) {
+    showTip(String(err));
+  }
 }

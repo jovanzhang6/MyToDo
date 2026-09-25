@@ -25,6 +25,7 @@ pub struct StateDto {
     pub always_on_top: bool,
     pub glass_opacity: f32,
     pub reminders_enabled: bool,
+    pub backlog_days: u32,
     pub autostart_enabled: bool,
     pub stats: crate::stats::StatsDto,
 }
@@ -63,6 +64,7 @@ pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
         always_on_top: todo::always_on_top(&db),
         glass_opacity: db.window.and_then(|w| w.opacity).unwrap_or(0.5),
         reminders_enabled: db.reminders_enabled,
+        backlog_days: db.backlog_days,
         autostart_enabled: {
             use tauri_plugin_autostart::ManagerExt;
             app.autolaunch().is_enabled().unwrap_or(false)
@@ -204,6 +206,20 @@ pub fn set_autostart(app: AppHandle, on: bool) -> Result<(), String> {
         launcher.disable()
     };
     result.map_err(|e| format!("设置开机自启失败：{e}"))
+}
+
+/// 积压告警阈值（1–30 天，越界收敛）。
+#[tauri::command]
+pub fn set_backlog_days(app: AppHandle, days: u32) -> Result<u32, String> {
+    let clamped = days.clamp(1, 30);
+    let state = app.state::<AppState>();
+    {
+        let mut db = state.db.lock().unwrap();
+        db.backlog_days = clamped;
+    }
+    crate::store::save(&state.db.lock().unwrap(), &state.path)
+        .map_err(|e| format!("保存失败：{e}"))?;
+    Ok(clamped)
 }
 
 static HIDE_TIP_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

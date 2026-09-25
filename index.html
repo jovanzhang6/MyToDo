@@ -107,6 +107,14 @@
               <span>到期提醒<small>限时任务到期当天通知一次</small></span>
               <label class="switch"><input type="checkbox" id="reminders-toggle" /><i></i></label>
             </div>
+            <div class="set-row" id="backlog-row">
+              <span>积压提醒<small id="backlog-desc">不限时任务躺 3 天未动时在统计页告警</small></span>
+              <div class="stepper">
+                <button id="backlog-minus" type="button" aria-label="减少">−</button>
+                <b id="backlog-value">3</b><small>天</small>
+                <button id="backlog-plus" type="button" aria-label="增加">＋</button>
+              </div>
+            </div>
             <div class="set-row">
               <span>窗口置顶<small>常驻其他窗口之上</small></span>
               <label class="switch"><input type="checkbox" id="pin-toggle" /><i></i></label>

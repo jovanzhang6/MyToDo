@@ -64,7 +64,7 @@ export function renderStats(state: StateDto): void {
   }
   document.getElementById("health-note")!.textContent =
     s.on_time_rate === null && s.backlog_count === 0
-      ? "限时任务完成后这里会给出按期率；不限时积压 3 天起提醒"
+      ? `限时任务完成后这里会给出按期率；不限时积压 ${state.backlog_days} 天起提醒`
       : "";
 }
 

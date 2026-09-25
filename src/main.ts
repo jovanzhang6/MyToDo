@@ -36,6 +36,7 @@ export interface StateDto {
   always_on_top: boolean;
   glass_opacity: number;
   reminders_enabled: boolean;
+  backlog_days: number;
   autostart_enabled: boolean;
   stats: StatsDto;
 }

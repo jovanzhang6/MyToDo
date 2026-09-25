@@ -86,10 +86,17 @@ pub struct Database {
     /// 到期提醒总开关（设置面板）
     #[serde(default = "default_true")]
     pub reminders_enabled: bool,
+    /// 积压告警阈值（天）：不限时任务未动够 N 天触发告警（设置面板可调 1–30）
+    #[serde(default = "default_backlog_days")]
+    pub backlog_days: u32,
 }
 
 fn default_true() -> bool {
     true
+}
+
+fn default_backlog_days() -> u32 {
+    3
 }
 
 pub fn new_database() -> Database {
@@ -102,6 +109,7 @@ pub fn new_database() -> Database {
         daily_log: Vec::new(),
         last_notified_date: None,
         reminders_enabled: true,
+        backlog_days: 3,
     }
 }
 

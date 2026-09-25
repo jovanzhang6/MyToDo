@@ -29,37 +29,65 @@ pub fn apply_startup_geometry(app: &AppHandle, window: &WebviewWindow) {
     let _ = window.set_always_on_top(on_top);
 }
 
-/// 悬浮球几何：56×56 圆球。收球时先关 resizable（绕过 conf 最小尺寸约束）再 set_size；
-/// 展球恢复 pre_ball 几何并重新开启缩放。程序性 set_size 不受 resizable 限制。
+/// 悬浮球几何与形态：收球=捕获真实几何→关 resizable→缩到球尺寸→**清掉 Acrylic 材质**
+/// （材质涂满整个矩形窗口，不清掉就无法呈现正圆——四角会露灰）；展球=恢复真实几何+重涂材质。
 pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
-    let target = {
-        let state = app.state::<AppState>();
-        let db = state.db.lock().unwrap();
-        let ws = db.window.unwrap_or_default();
-        if on {
-            (ws.x, ws.y, BALL_SIZE, BALL_SIZE)
-        } else {
-            match db.pre_ball {
-                // 几何自愈：pre_ball 异常小（历史污染）时回退默认展开尺寸
-                Some(pre) if pre.width >= MIN_VALID_W => {
-                    (pre.x, pre.y, pre.width, pre.height)
-                }
-                _ => (ws.x, ws.y, DEFAULT_W, DEFAULT_H),
-            }
-        }
-    };
+    let state = app.state::<AppState>();
     if on {
+        // 捕获窗口此刻的真实几何（而非可能滞后的落盘值），展球时所见即所得
+        let pos = window.outer_position().unwrap_or_default();
+        let size = window.outer_size().unwrap_or_default();
+        let opacity = {
+            let mut db = state.db.lock().unwrap();
+            let ws = *db.window.get_or_insert_with(Default::default);
+            let pre = WindowState {
+                x: pos.x,
+                y: pos.y,
+                width: size.width,
+                height: size.height,
+                always_on_top: ws.always_on_top,
+                opacity: ws.opacity,
+                ball_mode: false,
+            };
+            db.pre_ball = Some(pre);
+            ws.opacity
+        };
         let _ = window.set_resizable(false);
+        let _ = window.set_size(tauri::PhysicalSize::new(BALL_SIZE, BALL_SIZE));
+        // 清材质：让窗口四角真正透明（露桌面而非灰 Acrylic）
+        #[cfg(target_os = "windows")]
+        {
+            let _ = window_vibrancy::clear_acrylic(window);
+            let _ = window_vibrancy::clear_mica(window);
+        }
+        eprintln!(
+            "[球] 收球 pre=({},{},{},{})",
+            pos.x, pos.y, size.width, size.height
+        );
+    } else {
+        let target = {
+            let db = state.db.lock().unwrap();
+            match db.pre_ball {
+                // 自愈钳位：pre 异常小（历史污染）时回退默认展开尺寸
+                Some(pre) if pre.width >= MIN_VALID_W => {
+                    (pre.x, pre.y, pre.width, pre.height, pre.opacity)
+                }
+                _ => {
+                    let ws = db.window.unwrap_or_default();
+                    (ws.x, ws.y, DEFAULT_W, DEFAULT_H, ws.opacity)
+                }
+            }
+        };
+        let _ = window.set_resizable(true);
         let _ = window.set_size(tauri::PhysicalSize::new(target.2, target.3));
         let _ = window.set_position(PhysicalPosition::new(target.0, target.1));
-    } else {
-        let _ = window.set_resizable(true);
-        if target.2 > 0 {
-            let _ = window.set_size(tauri::PhysicalSize::new(target.2, target.3));
-        }
-        let _ = window.set_position(PhysicalPosition::new(target.0, target.1));
-        // 展开后立即把恢复的几何写为当前记忆（自愈：覆盖任何历史污染）
+        apply_blur(window, target.4.unwrap_or(0.5));
+        // 展开即重写记忆（自愈：覆盖任何历史污染）
         persist_geometry(app, (target.0, target.1), (target.2, target.3));
+        eprintln!(
+            "[球] 展开 target=({},{},{},{})",
+            target.0, target.1, target.2, target.3
+        );
     }
 }
 

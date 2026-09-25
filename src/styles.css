@@ -441,7 +441,7 @@ body {
   display: none !important;
 }
 
-/* 悬浮球模式：窗口=实心圆盘（进度环 + 中心数字），标题栏/缩放热区退场 */
+/* 悬浮球模式：窗口=实心圆盘（材质已清，透明即真透明），标题栏/缩放热区退场 */
 body.ball-mode #titlebar {
   display: none;
 }
@@ -451,10 +451,11 @@ body.ball-mode .rz {
 }
 
 body.ball-mode #app {
-  background: transparent;
+  border-radius: 50%;
+  background: linear-gradient(160deg, #6aa7dd 0%, #3d7fc0 100%);
   border: none;
-  box-shadow: 0 6px 20px rgba(40, 70, 110, 0.5);
-  overflow: visible;
+  box-shadow: 0 6px 22px rgba(30, 60, 100, 0.55);
+  overflow: hidden;
 }
 
 #view-ball {
@@ -462,45 +463,44 @@ body.ball-mode #app {
   justify-content: center;
 }
 
-/* 球 = 满铺圆盘：外圈 conic 进度环，内芯实底大数字 */
+/* 球面：conic 进度环（透明段露出蓝渐变盘面），内芯近实白 */
 #ball {
   width: 100%;
   height: 100%;
   border-radius: 50%;
   background: conic-gradient(
-    var(--accent) var(--p, 0%),
-    rgba(255, 255, 255, 0.35) 0
+    rgba(255, 255, 255, 0.92) var(--p, 0%),
+    transparent 0
   );
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   user-select: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
 }
 
 #ball-core {
-  width: 76%;
-  height: 76%;
+  width: 72%;
+  height: 72%;
   border-radius: 50%;
-  background: rgba(250, 253, 255, 0.94);
+  background: rgba(21, 48, 78, 0.88);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 2px;
 }
 
 #ball-count {
   font-size: 16px;
   font-weight: 700;
   line-height: 1;
-  color: var(--accent);
+  color: #fff;
 }
 
 #ball-core small {
   font-size: 9px;
-  color: var(--ink-dim);
+  color: rgba(255, 255, 255, 0.75);
   line-height: 1;
 }
 
@@ -509,11 +509,11 @@ body.ball-mode #app {
 }
 
 #ball.ball-done #ball-core {
-  background: rgba(240, 250, 238, 0.95);
+  background: rgba(18, 60, 26, 0.9);
 }
 
 #ball.ball-done #ball-count {
-  color: #58a942;
+  color: #7ed87e;
 }
 
 /* ── 统计整页 ────────────────────────────────── */

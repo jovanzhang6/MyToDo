@@ -1,17 +1,51 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { StateDto } from "../main";
 import { showView } from "./views";
 import { showTip } from "./addbar";
 
-/** 悬浮球视图：收球按钮 + 球面渲染（未完成数、全绿彩蛋）+ 点击展开 */
+const cur = getCurrentWindow();
+
+/** 悬浮球视图：收球按钮 + 球面渲染（未完成数、全绿彩蛋）+ 拖动/点击展开 */
 export function initBall(): void {
   document.getElementById("btn-ball")!.addEventListener("click", (e) => {
     e.stopPropagation();
     invoke("set_ball_mode", { on: true }).catch((err) => showTip(String(err)));
   });
-  // 球面整体是拖动区（data-tauri-drag-region）；短按无位移 = 点击展开
-  document.getElementById("ball")!.addEventListener("click", () => {
-    invoke("set_ball_mode", { on: false }).catch((err) => showTip(String(err)));
+
+  // 球的拖动/点击判定（预案启用：Tauri 拖动区会吞 click，改自研位移阈值）
+  // 按住后位移 ≤4px 且松手 = 点击展开；位移超阈值 = 交给系统拖拽
+  const ball = document.getElementById("ball")!;
+  let sx = 0;
+  let sy = 0;
+  let dragging = false;
+  ball.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    sx = e.clientX;
+    sy = e.clientY;
+    dragging = false;
+    const onMove = (m: MouseEvent) => {
+      if (dragging) return;
+      if (Math.abs(m.clientX - sx) > 4 || Math.abs(m.clientY - sy) > 4) {
+        dragging = true;
+        cleanup();
+        cur.startDragging();
+      }
+    };
+    const onUp = () => {
+      cleanup();
+      if (!dragging) {
+        invoke("set_ball_mode", { on: false }).catch((err) =>
+          showTip(String(err))
+        );
+      }
+    };
+    const cleanup = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
   });
 }
 

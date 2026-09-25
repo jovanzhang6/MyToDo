@@ -57,7 +57,7 @@ pub fn apply_ball_geometry(app: &AppHandle, window: &WebviewWindow, on: bool) {
     }
 }
 
-pub const BALL_SIZE: u32 = 56;
+pub const BALL_SIZE: u32 = 64;
 const DEFAULT_W: u32 = 300;
 const DEFAULT_H: u32 = 520;
 

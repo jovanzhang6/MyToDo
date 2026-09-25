@@ -412,11 +412,20 @@ body {
   display: none !important;
 }
 
-/* 悬浮球模式：窗口本身变正圆 */
+/* 悬浮球模式：窗口本身变正圆，标题栏/缩放热区全部退场 */
+body.ball-mode #titlebar {
+  display: none;
+}
+
+body.ball-mode .rz {
+  display: none;
+}
+
 body.ball-mode #app {
   border-radius: 50%;
-  border-color: rgba(255, 255, 255, 0.75);
-  box-shadow: 0 6px 20px rgba(80, 120, 180, 0.4);
+  border-color: transparent;
+  box-shadow: 0 6px 20px rgba(80, 120, 180, 0.45);
+  overflow: hidden;
 }
 
 #view-ball {

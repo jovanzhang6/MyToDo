@@ -227,33 +227,10 @@ pub fn set_backlog_days(app: AppHandle, days: u32) -> Result<u32, String> {
     Ok(clamped)
 }
 
-/// 悬浮球模式切换：on=记录当前几何并收成球；off=恢复收球前几何。
-/// 球态不落盘（store::save 统一剥离），强杀重启必为展开态。
+/// 悬浮球模式切换：几何与形态全部委托 apply_ball_geometry（单一所有权，
+/// 此前命令层和几何层重复恢复 pre_ball 导致展开尺寸错乱）。
 #[tauri::command]
 pub fn set_ball_mode(app: AppHandle, window: WebviewWindow, on: bool) -> Result<(), String> {
-    let state = app.state::<AppState>();
-    {
-        let mut db = state.db.lock().unwrap();
-        if on {
-            let ws = *db.window.get_or_insert_with(Default::default);
-            if !ws.ball_mode {
-                // 记录收球前的几何（Database 级字段，落盘时剥离）
-                db.pre_ball = Some(ws);
-            }
-            db.window = Some(WindowState {
-                ball_mode: true,
-                ..ws
-            });
-        } else {
-            if let Some(pre) = db.pre_ball.take() {
-                db.window = Some(pre);
-            }
-            if let Some(w) = db.window.as_mut() {
-                w.ball_mode = false;
-            }
-        }
-    }
-    drop(state);
     crate::window::apply_ball_geometry(&app, &window, on);
     // 广播让前端切视图（球视图/清单视图）
     app.emit("state-changed", ()).map_err(|e| e.to_string())

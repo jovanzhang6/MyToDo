@@ -59,9 +59,17 @@ export function initBall(): void {
   });
 }
 
+let lastViewport = "";
+
 /** refresh 回流：球窗渲染球面；主窗无需处理（收球时主窗整体隐藏） */
 export function renderBall(state: StateDto): void {
   if (!IS_BALL_WINDOW) return;
+  // 视口尺寸诊断：只在变化时上报
+  const vp = `${window.innerWidth}x${window.innerHeight} dpr=${window.devicePixelRatio}`;
+  if (vp !== lastViewport) {
+    lastViewport = vp;
+    invoke("log_frontend", { msg: `[球窗] 视口 ${vp}` }).catch(() => {});
+  }
   const { today_done, today_total } = state.stats;
   const undone = today_total - today_done;
   const pct = today_total === 0 ? 0 : Math.round((today_done / today_total) * 100);

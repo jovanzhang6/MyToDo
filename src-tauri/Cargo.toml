@@ -1,6 +1,6 @@
 [package]
 name = "mytodo"
-version = "0.1.0"
+version = "0.1.1"
 description = "MyToDo - 桌面磨砂玻璃 TODO 小组件"
 authors = ["mytodo"]
 edition = "2021"

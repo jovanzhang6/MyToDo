@@ -299,30 +299,49 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
         let _ = main.hide();
         BALL_DRAGGING.store(true, std::sync::atomic::Ordering::SeqCst);
         {
-            // 两段动画线程：段1 滑到边全露，段2 缩进贴点位；期间球窗隐藏则中止
+            // 收球动画（时间驱动，8ms 一拍按真实流逝时间取位，免疫睡眠抖动）：
+            // 0–55% 主窗位置 → 边上全露（ease-out）；55–100% 边上 → 缩进贴点位（ease-in-out），无停顿
             let a2 = app.clone();
             let ball2 = ball.clone();
             std::thread::spawn(move || {
-                const STEPS: u32 = 10;
-                let anim = |fx: i32, fy: i32, tx2: i32, ty2: i32, steps: u32| {
-                    for i in 1..=steps {
-                        if !ball2.is_visible().unwrap_or(false) {
-                            return;
-                        }
-                        let t = i as f64 / steps as f64;
-                        let e = 1.0 - (1.0 - t) * (1.0 - t);
-                        let _ = ball2.set_position(PhysicalPosition::new(
-                            fx + ((tx2 - fx) as f64 * e).round() as i32,
-                            fy + ((ty2 - fy) as f64 * e).round() as i32,
-                        ));
-                        std::thread::sleep(std::time::Duration::from_millis(26));
+                const TOTAL: std::time::Duration = std::time::Duration::from_millis(420);
+                let t0 = std::time::Instant::now();
+                let ease_out = |t: f64| 1.0 - (1.0 - t) * (1.0 - t);
+                let ease_in_out = |t: f64| {
+                    if t < 0.5 {
+                        2.0 * t * t
+                    } else {
+                        1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
                     }
                 };
-                anim(pos.x, pos.y, edge_x, edge_y, STEPS);
-                std::thread::sleep(std::time::Duration::from_millis(120));
-                anim(edge_x, edge_y, dock_x, dock_y, STEPS);
+                loop {
+                    let p = (t0.elapsed().as_secs_f64()
+                        / TOTAL.as_secs_f64())
+                    .min(1.0);
+                    let (x, y) = if p < 0.55 {
+                        let k = ease_out(p / 0.55);
+                        (
+                            pos.x as f64 + (edge_x - pos.x) as f64 * k,
+                            pos.y as f64 + (edge_y - pos.y) as f64 * k,
+                        )
+                    } else {
+                        let k = ease_in_out((p - 0.55) / 0.45);
+                        (
+                            edge_x as f64 + (dock_x - edge_x) as f64 * k,
+                            edge_y as f64 + (dock_y - edge_y) as f64 * k,
+                        )
+                    };
+                    let _ = ball2.set_position(PhysicalPosition::new(
+                        x.round() as i32,
+                        y.round() as i32,
+                    ));
+                    if !ball2.is_visible().unwrap_or(false) || p >= 1.0 {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(8));
+                }
                 BALL_DRAGGING.store(false, std::sync::atomic::Ordering::SeqCst);
-                let _ = a2; // app 借用占位
+                let _ = a2;
             });
         }
         let bsize = ball.outer_size().map(|s| (s.width, s.height));

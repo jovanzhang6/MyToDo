@@ -1,0 +1,19 @@
+{
+  "name": "mytodo-promo",
+  "private": true,
+  "scripts": {
+    "render": "remotion render src/index.ts Promo out/promo.mp4",
+    "studio": "remotion studio src/index.ts"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.6.0"
+  }
+}

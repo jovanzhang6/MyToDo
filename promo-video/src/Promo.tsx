@@ -757,67 +757,66 @@ export const Promo: React.FC = () => {
   const settleX = interpolate(f, [40, 70], [683, 235], { ...clamp, easing: easeIO });
   const homeX = f < 40 ? 683 : f < 560 ? settleX : interpolate(f, [560, 590], [235, 683], { ...clamp, easing: easeIO });
 
-  /* 收球变形（点 ◎ 后小窗飞向屏幕右缘） */
-  const morph = interpolate(f, [T_BALL, T_BALL + 24], [0, 1], { ...clamp, easing: easeIO });
-  const expand = interpolate(f, [T_EXPAND, T_EXPAND + 22], [0, 1], { ...clamp, easing: easeIO });
+  /* 收球变形（点 ◎ 后小窗一边缩放一边随镜头飞向球的停靠点，镜头落定瞬间原位化作球） */
+  const morph = interpolate(f, [T_BALL, T_BALL + 30], [0, 1], { ...clamp, easing: easeIO });
+  const expand = interpolate(f, [T_EXPAND, T_EXPAND + 26], [0, 1], { ...clamp, easing: easeIO });
   const m = Math.min(morph, 1 - expand);
   const wScale = WS * (1 - m * 0.93);
-  const wOx = homeX + m * (1852 - homeX);
+  const wOx = homeX + m * (2137 - homeX);
   const enterIn = interpolate(f, [0, 18], [0, 1], { ...clamp, easing: easeOut });
-  const wOy = OY + (1 - enterIn) * 44 + m * (462 - OY);
+  const wOy = OY + (1 - enterIn) * 44 + m * (530 - OY);
   const wOpacity =
     f < T_BALL
       ? interpolate(f, [0, 16], [0, 1], clamp)
       : f < T_EXPAND
-        ? interpolate(f, [T_BALL + 14, T_BALL + 24], [1, 0], clamp)
+        ? interpolate(f, [T_BALL + 22, T_BALL + 30], [1, 0], clamp)
         : interpolate(f, [T_EXPAND, T_EXPAND + 8], [0, 1], clamp);
   /* 收尾：小窗淡出 + 回中 */
   const endOut = interpolate(f, [T_END + 14, T_END + 42], [1, 0], clamp);
   const endDrift = interpolate(f, [T_END, T_END + 40], [0, 26], { ...clamp, easing: easeIO });
   const finalOpacity = wOpacity * endOut;
 
-  /* 球时间线：出生→贴右缘（55% 露出）→镜头推近时同步外滑保持贴边→悬停滑出全露 */
-  const ballFly = guardedSpring(f, T_BALL + 8, fps, 14, 90);
-  const dockPush = interpolate(f, [382, 402], [0, 1], { ...clamp, easing: easeIO });
+  /* 球时间线：镜头落定后、在小窗消失的原位（停靠点）弹出；悬停时滑出全露 */
+  const ballPop = guardedSpring(f, T_BALL + 26, fps, 13, 120);
   const hoverOut = interpolate(f, [T_HOVER, T_HOVER + 16], [0, 1], { ...clamp, easing: easeIO });
-  const ballX = 1852 + ballFly * 63 + dockPush * 227 - hoverOut * 60;
-  const ballY = 497 + ballFly * 43;
+  const ballX = 2143 - hoverOut * 61;
+  const ballY = 540;
   const ballOpacity =
-    f < T_BALL + 6 ? 0 : f < T_EXPAND ? interpolate(f, [T_BALL + 6, T_BALL + 14], [0, 1], clamp) : interpolate(f, [T_EXPAND, T_EXPAND + 8], [1, 0], clamp);
-  const ballScale = 0.3 + ballFly * 0.7;
+    f < T_BALL + 26 ? 0 : f < T_EXPAND ? interpolate(f, [T_BALL + 26, T_BALL + 34], [0, 1], clamp) : interpolate(f, [T_EXPAND, T_EXPAND + 8], [1, 0], clamp);
+  const ballScale = 0.4 + ballPop * 0.6;
 
   const showStats = f >= T_STATS;
 
   /* 收球段 punch-in 镜头：镜头推向右缘的球，展开时拉回 */
   const camZ =
-    f < 382
+    f < 350
       ? 1
-      : f < 402
-        ? interpolate(f, [382, 402], [1, 1.8], { ...clamp, easing: easeIO })
+      : f < 380
+        ? interpolate(f, [350, 380], [1, 1.8], { ...clamp, easing: easeIO })
         : f < 452
           ? 1.8
-          : f < 480
-            ? interpolate(f, [452, 480], [1.8, 1], { ...clamp, easing: easeIO })
+          : f < 478
+            ? interpolate(f, [452, 478], [1.8, 1], { ...clamp, easing: easeIO })
             : 1;
   const camX =
-    f < 382
+    f < 350
       ? 0
-      : f < 402
-        ? interpolate(f, [382, 402], [0, -1082], { ...clamp, easing: easeIO })
+      : f < 380
+        ? interpolate(f, [350, 380], [0, -1082], { ...clamp, easing: easeIO })
         : f < 452
           ? -1082
-          : f < 480
-            ? interpolate(f, [452, 480], [-1082, 0], { ...clamp, easing: easeIO })
+          : f < 478
+            ? interpolate(f, [452, 478], [-1082, 0], { ...clamp, easing: easeIO })
             : 0;
   const camY =
-    f < 382
+    f < 350
       ? 0
-      : f < 402
-        ? interpolate(f, [382, 402], [0, -240], { ...clamp, easing: easeIO })
+      : f < 380
+        ? interpolate(f, [350, 380], [0, -240], { ...clamp, easing: easeIO })
         : f < 452
           ? -240
-          : f < 480
-            ? interpolate(f, [452, 480], [-240, 0], { ...clamp, easing: easeIO })
+          : f < 478
+            ? interpolate(f, [452, 478], [-240, 0], { ...clamp, easing: easeIO })
             : 0;
 
   const capO = (a: number, b: number, c: number, d: number) =>

@@ -68,72 +68,66 @@ pub fn set_border_none(hwnd_raw: *mut core::ffi::c_void) {
     }
 }
 
-static DOCK_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static BALL_DRAGGING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static BALL_LAST_POS: std::sync::Mutex<Option<(i32, i32)>> = std::sync::Mutex::new(None);
+static BALL_STABLE_TICKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
-/// 收球后调度闲时贴边（后端权威：不依赖任何前端计时器）。展开时取消。
-pub fn schedule_dock(app: &AppHandle, delay_ms: u64) {
+/// 拖拽状态由球窗 mousedown 置位；守护线程按“连续两拍静止=松手”清除。
+pub fn set_ball_dragging(on: bool) {
+    BALL_DRAGGING.store(on, std::sync::atomic::Ordering::SeqCst);
+    BALL_STABLE_TICKS.store(0, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// 悬浮球守护线程（400ms 一拍）维持不变式：**球窗可见 = 必然处于贴点位**。
+/// - 拖拽中：连续两拍位置静止 → 视为松手，清除拖拽态
+/// - 非拖拽且不在贴点位 → 平滑滑回贴点位（拖到中间/任何漂移都会被拉回）
+pub fn start_ball_watcher(app: &AppHandle) {
     use std::sync::atomic::Ordering;
-    let gen = DOCK_GEN.fetch_add(1, Ordering::SeqCst) + 1;
     let a = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-        if DOCK_GEN.load(Ordering::SeqCst) != gen {
-            return; // 已被展开取消/被更新的调度取代
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        let Some(ball) = a.get_webview_window("ball") else {
+            continue;
+        };
+        if !ball.is_visible().unwrap_or(false) {
+            continue;
         }
-        dock_now(&a);
+        let Ok(pos) = ball.outer_position() else {
+            continue;
+        };
+        if BALL_DRAGGING.load(Ordering::SeqCst) {
+            let mut last = BALL_LAST_POS.lock().unwrap();
+            if *last == Some((pos.x, pos.y)) {
+                let n = BALL_STABLE_TICKS.fetch_add(1, Ordering::SeqCst) + 1;
+                if n >= 2 {
+                    BALL_DRAGGING.store(false, Ordering::SeqCst);
+                    BALL_STABLE_TICKS.store(0, Ordering::SeqCst);
+                    eprintln!("[球] 拖拽静止两拍，视为松手");
+                }
+            } else {
+                BALL_STABLE_TICKS.store(0, Ordering::SeqCst);
+                *last = Some((pos.x, pos.y));
+            }
+            continue;
+        }
+        // 非拖拽：不在贴点位就滑回（含收球初现、拖到中间松手等一切情况）
+        let Ok(size) = ball.outer_size() else {
+            continue;
+        };
+        let Some(Some(mon)) = ball.current_monitor().ok() else {
+            continue;
+        };
+        let m = (
+            mon.position().x,
+            mon.position().y,
+            mon.size().width,
+            mon.size().height,
+        );
+        let (tx, ty) = dock_target(m, (pos.x, pos.y, size.width, size.height));
+        if (pos.x, pos.y) != (tx, ty) {
+            glide_ball(&a, tx, ty);
+        }
     });
-}
-
-pub fn cancel_dock() {
-    use std::sync::atomic::Ordering;
-    DOCK_GEN.fetch_add(1, Ordering::SeqCst);
-}
-
-/// 立即贴边（球窗隐藏时跳过——不贴看不见的球）。
-pub fn dock_now(app: &AppHandle) {
-    use tauri::Manager;
-    let Some(ball) = app.get_webview_window("ball") else {
-        return;
-    };
-    if !ball.is_visible().unwrap_or(false) {
-        return;
-    }
-    let (Ok(pos), Ok(size)) = (ball.outer_position(), ball.outer_size()) else {
-        return;
-    };
-    let Some(Some(mon)) = ball.current_monitor().ok() else {
-        return;
-    };
-    let m = (
-        mon.position().x,
-        mon.position().y,
-        mon.size().width,
-        mon.size().height,
-    );
-    let (x, y) = dock_target(m, (pos.x, pos.y, size.width, size.height));
-    glide_ball(app, x, y);
-}
-
-/// 立即滑回全可见（悬停）。
-pub fn undock_now(app: &AppHandle) {
-    use tauri::Manager;
-    let Some(ball) = app.get_webview_window("ball") else {
-        return;
-    };
-    let (Ok(pos), Ok(size)) = (ball.outer_position(), ball.outer_size()) else {
-        return;
-    };
-    let Some(Some(mon)) = ball.current_monitor().ok() else {
-        return;
-    };
-    let m = (
-        mon.position().x,
-        mon.position().y,
-        mon.size().width,
-        mon.size().height,
-    );
-    let (x, y) = undock_target(m, (pos.x, pos.y, size.width, size.height));
-    glide_ball(app, x, y);
 }
 
 /// 悬浮球切换（独立球窗口架构）：收球=主窗隐藏+球窗显示（就地出现）；
@@ -166,13 +160,22 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
                 ball_mode: false,
             });
         }
-        let _ = ball.set_position(PhysicalPosition::new(pos.x, pos.y));
+        // 收球直接落到贴点位（不变式：可见即贴边，不给漂移留窗口）
+        let Some(Some(mon)) = main.current_monitor().ok() else {
+            return;
+        };
+        let m = (
+            mon.position().x,
+            mon.position().y,
+            mon.size().width,
+            mon.size().height,
+        );
+        let (bx, by) = dock_target(m, (pos.x, pos.y, BALL_SIZE, BALL_SIZE));
+        let _ = ball.set_position(PhysicalPosition::new(bx, by));
         let _ = ball.show();
         // 显示时强制重设尺寸并记录：创建时的 64×64 逻辑宽被某处撑到 135（实测），此处钳回
         let _ = ball.set_size(tauri::LogicalSize::new(56.0, 56.0));
         let _ = main.hide();
-        // 闲时贴边调度（后端权威）：收球 0.5 秒后自动贴边
-        schedule_dock(app, 500);
         let bsize = ball.outer_size().map(|s| (s.width, s.height));
         let bscale = ball.scale_factor().unwrap_or(1.0);
         eprintln!(
@@ -180,8 +183,6 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
             pos.x, pos.y
         );
     } else {
-        // 展开即取消待执行的贴边调度
-        cancel_dock();
         // 主窗在球的当前位置展开；出屏钳位（球贴边时展开不越过屏幕）
         let ball_pos = ball.outer_position().unwrap_or_default();
         let scale = ball.scale_factor().unwrap_or(1.0);
@@ -253,24 +254,6 @@ pub fn dock_target(
     let y = by.clamp(my, my + mh as i32 - bh as i32);
     (x, y)
 }
-
-/// 悬停滑出的全可见位置（同边）
-pub fn undock_target(
-    monitor: (i32, i32, u32, u32),
-    ball: (i32, i32, u32, u32),
-) -> (i32, i32) {
-    let (mx, my, mw, mh) = monitor;
-    let (bx, by, bw, bh) = ball;
-    let dock_left = bx + bw as i32 / 2 < mx + mw as i32 / 2;
-    let x = if dock_left {
-        mx
-    } else {
-        mx + mw as i32 - bw as i32
-    };
-    let y = by.clamp(my, my + mh as i32 - bh as i32);
-    (x, y)
-}
-
 static GLIDE_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// 球窗平滑滑向目标（ease-out ~290ms）。并发调用以最新目标为准（代际计数使旧动画失效）。
@@ -372,7 +355,7 @@ fn persist_geometry(handle: &AppHandle, pos: (i32, i32), size: (u32, u32)) {
 
 #[cfg(test)]
 mod tests {
-    use super::{dock_target, undock_target};
+    use super::dock_target;
 
     const MON: (i32, i32, u32, u32) = (0, 0, 1920, 1080);
     const BALL: (i32, i32, u32, u32) = (900, 500, 56, 56);
@@ -399,14 +382,6 @@ mod tests {
         let docked = dock_target(MON, BALL);
         let again = dock_target(MON, (docked.0, docked.1, BALL.2, BALL.3));
         assert_eq!(docked, again, "重复贴边不漂移");
-    }
-
-    #[test]
-    fn undock_returns_fully_visible_same_side() {
-        let (ux, uy) = undock_target(MON, (100, 500, 56, 56));
-        assert_eq!((ux, uy), (0, 500), "左半屏悬停 → 全露贴左");
-        let (ux, _) = undock_target(MON, (1700, 500, 56, 56));
-        assert_eq!(ux, 1920 - 56, "右半屏悬停 → 全露贴右");
     }
 
     #[test]

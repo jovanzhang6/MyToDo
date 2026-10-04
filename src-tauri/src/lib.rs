@@ -98,8 +98,7 @@ pub fn run() {
             commands::set_backlog_days,
             commands::set_autostart,
             commands::set_ball_mode,
-            commands::dock_ball,
-            commands::undock_ball,
+            commands::set_ball_dragging,
             commands::log_frontend,
             commands::hide_window
         ])

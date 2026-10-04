@@ -14,27 +14,15 @@ export function initBall(): void {
     // 球窗里球视图常驻（HTML 自带 hidden 属性，必须显式摘掉）
     document.getElementById("view-ball")!.hidden = false;
     // 球窗：按住位移 ≤4px = 点击展开；超阈值 = 交给系统拖拽
-    // （闲时贴边调度在 Rust 后端：收球 0.5s 自动贴，前端只发悬停/松手事件）
+    // （贴边由 Rust 守护线程维持不变式「可见即贴边」；前端只报拖拽态与点击展开）
     const ball = document.getElementById("ball")!;
     let sx = 0;
     let sy = 0;
     let dragging = false;
-    let docked = false;
-
-    // 悬停贴边球 → 滑回全可见；移开 → 立即贴回
-    ball.addEventListener("mouseenter", () => {
-      if (!docked) return;
-      docked = false;
-      invoke("undock_ball").catch(() => {});
-    });
-    ball.addEventListener("mouseleave", () => {
-      if (dragging) return;
-      invoke("dock_ball").then(() => (docked = true)).catch(() => {});
-    });
 
     ball.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
-      docked = false;
+      invoke("set_ball_dragging", { on: true }).catch(() => {});
       sx = e.clientX;
       sy = e.clientY;
       dragging = false;
@@ -51,13 +39,8 @@ export function initBall(): void {
         if (!dragging) {
           invoke("set_ball_mode", { on: false })
             .catch((err) => showTip(String(err)));
-        } else {
-          // 拖动松手：等系统落定最终位置（150ms）后立即贴边
-          setTimeout(
-            () => invoke("dock_ball").then(() => (docked = true)).catch(() => {}),
-            150
-          );
         }
+        // 拖拽松手的贴边由守护线程按「静止两拍」自动接管，前端无需处理
       };
       const cleanup = () => {
         document.removeEventListener("mousemove", onMove);

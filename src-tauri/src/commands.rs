@@ -235,18 +235,10 @@ pub fn set_ball_mode(app: AppHandle, on: bool) -> Result<(), String> {
     app.emit("state-changed", ()).map_err(|e| e.to_string())
 }
 
-/// 闲时贴边：滑向水平最近边，露 60% 藏 40%。
+/// 球窗 mousedown 时置位拖拽态（守护线程按静止两拍判定松手）。
 #[tauri::command]
-pub fn dock_ball(app: AppHandle) -> Result<(), String> {
-    crate::window::dock_now(&app);
-    Ok(())
-}
-
-/// 悬停滑出：回到同边全可见。
-#[tauri::command]
-pub fn undock_ball(app: AppHandle) -> Result<(), String> {
-    crate::window::undock_now(&app);
-    Ok(())
+pub fn set_ball_dragging(on: bool) {
+    crate::window::set_ball_dragging(on);
 }
 
 static HIDE_TIP_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

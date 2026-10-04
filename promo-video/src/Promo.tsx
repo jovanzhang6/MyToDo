@@ -371,8 +371,11 @@ const ListView: React.FC<{ t: number; fps: number; visible: boolean }> = ({ t, f
     { key: "E", text: "夜间复盘", badge: "每日", cls: "daily" as const, base: 3,
       steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }, { at: T_CHECK2, d: -1 }], doneAt: -1, appear: -1 },
   ];
-  const typed = "交季度报告".slice(0, Math.max(0, Math.min(5, Math.floor((t - T_TYPE) / 5))));
-  const caretOn = t >= T_TYPE && t < T_KIND + 24 && Math.floor(t / 8) % 2 === 0;
+  const typed =
+    t < T_ADD
+      ? "交季度报告".slice(0, Math.max(0, Math.min(5, Math.floor((t - T_TYPE) / 5))))
+      : "";
+  const caretOn = t >= T_TYPE && t < T_ADD && Math.floor(t / 8) % 2 === 0;
   const limited = t >= T_KIND;
   const plus = t >= T_PLUS1 ? (t >= T_PLUS1 + 8 ? 2 : 1) : 0;
   const dueDate = `2026-10-0${4 + plus}`;
@@ -529,7 +532,7 @@ const StatsView: React.FC<{ t: number; fps: number; visible: boolean }> = ({ t, 
     transform: `translateY(${(1 - interpolate(st, [2 + i * 3, 8 + i * 3], [0, 1], { ...clamp, easing: easeOut })) * 10}px)`,
   });
   return (
-    <div style={{ position: "absolute", inset: 0, opacity: visible ? 1 : 0, fontFamily: SANS }}>
+    <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, top: 38, opacity: visible ? 1 : 0, fontFamily: SANS }}>
       <header style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px 2px", fontSize: 13, color: INK }}>
         <span
           style={{
@@ -760,7 +763,8 @@ export const Promo: React.FC = () => {
   const m = Math.min(morph, 1 - expand);
   const wScale = WS * (1 - m * 0.93);
   const wOx = homeX + m * (1852 - homeX);
-  const wOy = OY + m * (462 - OY);
+  const enterIn = interpolate(f, [0, 18], [0, 1], { ...clamp, easing: easeOut });
+  const wOy = OY + (1 - enterIn) * 44 + m * (462 - OY);
   const wOpacity =
     f < T_BALL
       ? interpolate(f, [0, 16], [0, 1], clamp)
@@ -853,17 +857,17 @@ export const Promo: React.FC = () => {
           }}
         />
 
-        {/* 小窗落影 */}
+        {/* 小窗落影（贴在可视底缘正下方，随缩放跟随） */}
         {finalOpacity > 0.01 && (
           <div
             style={{
               position: "absolute",
-              left: wOx + 30,
-              top: wOy + 520 * (wScale / WS) + 44,
-              width: 300 * (wScale / WS) + 200,
-              height: 46,
+              left: wOx + (150 - 340) * (wScale / WS),
+              top: wOy + 520 * wScale + 6,
+              width: 680 * (wScale / WS),
+              height: 44,
               borderRadius: "50%",
-              background: `radial-gradient(ellipse, rgba(40,70,110,${0.22 * finalOpacity}), transparent 68%)`,
+              background: `radial-gradient(ellipse, rgba(40,70,110,${0.2 * finalOpacity}), transparent 68%)`,
               filter: "blur(8px)",
             }}
           />
@@ -888,20 +892,7 @@ export const Promo: React.FC = () => {
           </div>
         )}
 
-        {/* 文案 */}
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: 96,
-            textAlign: "center",
-            opacity: capO(8, 22, 40, 54),
-          }}
-        >
-          <div style={{ fontSize: 34, fontWeight: 600, color: A_INK, letterSpacing: 1 }}>MyToDo</div>
-          <div style={{ fontSize: 17, color: A_DIM, letterSpacing: 6, marginTop: 8 }}>WINDOWS 桌面待办</div>
-        </div>
+        {/* 文案（开场纯产品，无浮字；品牌在尾板） */}
 
         <Caption x={1010} y={360} lines={["想到，就记下。"]} sub="不限时 · 每日 · 限时，回车即加" o={capO(74, 92, 214, 232)} />
         <Caption x={1010} y={360} lines={["完成，点一下就好。"]} sub="已完成的自动沉底，不打扰" o={capO(228, 246, 306, 324)} />

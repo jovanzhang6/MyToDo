@@ -21,23 +21,32 @@ export function initBall(): void {
     let dockTimer: number | undefined;
     let docked = false;
 
-    /** 闲时贴边：静置 2 秒滑向最近边（悬停/拖动/展开都会重置计时） */
-    const armDock = () => {
+    /** 闲时贴边：静置 0.5 秒滑向最近边；悬停移开/拖动松手是立即贴 */
+    const armDock = (delay = 500) => {
       clearTimeout(dockTimer);
       dockTimer = window.setTimeout(async () => {
         await invoke("dock_ball").catch(() => {});
         docked = true;
-      }, 2000);
+      }, delay);
+    };
+    const dockNow = () => {
+      clearTimeout(dockTimer);
+      invoke("dock_ball")
+        .then(() => (docked = true))
+        .catch(() => {});
     };
     const disarmDock = () => clearTimeout(dockTimer);
 
-    // 悬停贴边球 → 滑回全可见；移开 → 重新计时贴边
+    // 悬停贴边球 → 滑回全可见；移开 → 立即贴回
     ball.addEventListener("mouseenter", () => {
       if (!docked) return;
       docked = false;
       invoke("undock_ball").catch(() => {});
     });
-    ball.addEventListener("mouseleave", () => armDock());
+    ball.addEventListener("mouseleave", () => {
+      if (dragging) return;
+      dockNow();
+    });
 
     ball.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
@@ -59,6 +68,9 @@ export function initBall(): void {
         if (!dragging) {
           invoke("set_ball_mode", { on: false })
             .catch((err) => showTip(String(err)));
+        } else {
+          // 拖动松手：等系统落定最终位置（150ms）后立即贴边
+          setTimeout(() => dockNow(), 150);
         }
       };
       const cleanup = () => {

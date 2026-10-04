@@ -1,6 +1,6 @@
 //! 窗口壳：默认右上角定位、磨砂背景（三级回退）、几何状态记忆。
 
-use tauri::{AppHandle, Manager, PhysicalPosition, WebviewWindow, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewWindow, WindowEvent};
 
 use crate::commands::AppState;
 use crate::todo::WindowState;
@@ -72,12 +72,6 @@ static BALL_DRAGGING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicB
 static BALL_LAST_POS: std::sync::Mutex<Option<(i32, i32)>> = std::sync::Mutex::new(None);
 static BALL_STABLE_TICKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
-/// 拖拽状态由球窗 mousedown 置位；守护线程按“连续两拍静止=松手”清除。
-pub fn set_ball_dragging(on: bool) {
-    BALL_DRAGGING.store(on, std::sync::atomic::Ordering::SeqCst);
-    BALL_STABLE_TICKS.store(0, std::sync::atomic::Ordering::SeqCst);
-}
-
 /// 悬浮球守护线程（400ms 一拍）维持不变式：**球窗可见 = 必然处于贴点位**。
 /// - 拖拽中：连续两拍位置静止 → 视为松手，清除拖拽态
 /// - 非拖拽且不在贴点位 → 平滑滑回贴点位（拖到中间/任何漂移都会被拉回）
@@ -126,6 +120,85 @@ pub fn start_ball_watcher(app: &AppHandle) {
         let (tx, ty) = dock_target(m, (pos.x, pos.y, size.width, size.height));
         if (pos.x, pos.y) != (tx, ty) {
             glide_ball(&a, tx, ty);
+        }
+    });
+}
+
+/// 立即贴边（拖拽松手/守护兜底共用）：球窗可见时滑向贴点位。
+pub fn dock_now(app: &AppHandle) {
+    let Some(ball) = app.get_webview_window("ball") else {
+        return;
+    };
+    if !ball.is_visible().unwrap_or(false) {
+        return;
+    }
+    let (Ok(pos), Ok(size)) = (ball.outer_position(), ball.outer_size()) else {
+        return;
+    };
+    let Some(Some(mon)) = ball.current_monitor().ok() else {
+        return;
+    };
+    let m = (
+        mon.position().x,
+        mon.position().y,
+        mon.size().width,
+        mon.size().height,
+    );
+    let (x, y) = dock_target(m, (pos.x, pos.y, size.width, size.height));
+    glide_ball(app, x, y);
+}
+
+/// 球窗自绘拖拽（Rust 轮询鼠标，16ms 跟手）：松手瞬间判定——
+/// 位移 ≤5px = 点击展开主窗；超过 = 拖拽完成，立即贴边（守护线程此后仅兜底）。
+pub fn start_ball_drag(app: AppHandle) {
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+    use std::sync::atomic::Ordering;
+    std::thread::spawn(move || {
+        let Some(ball) = app.get_webview_window("ball") else {
+            return;
+        };
+        let mut start_cur = POINT::default();
+        if unsafe { GetCursorPos(&mut start_cur) }.is_err() {
+            return;
+        };
+        let Ok(start_ball) = ball.outer_position() else {
+            return;
+        };
+        let offset = (start_ball.x - start_cur.x, start_ball.y - start_cur.y);
+        BALL_DRAGGING.store(true, Ordering::SeqCst);
+        let mut engaged = false;
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(16));
+            let mut cur = POINT::default();
+            if unsafe { GetCursorPos(&mut cur) }.is_err() {
+                break;
+            };
+            let pressed = unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) } < 0;
+            if !pressed {
+                break; // 松手瞬间退出循环，走下方判定
+            }
+            let dx = cur.x - start_cur.x;
+            let dy = cur.y - start_cur.y;
+            if !engaged && dx * dx + dy * dy > 25 {
+                engaged = true;
+            }
+            if engaged {
+                let _ = ball.set_position(PhysicalPosition::new(
+                    cur.x + offset.0,
+                    cur.y + offset.1,
+                ));
+            }
+        }
+        BALL_DRAGGING.store(false, Ordering::SeqCst);
+        if engaged {
+            // 拖拽完成 → 立即贴边
+            dock_now(&app);
+        } else {
+            // 点击 → 展开主窗
+            switch_ball_mode(&app, false);
+            let _ = app.emit("state-changed", ());
         }
     });
 }

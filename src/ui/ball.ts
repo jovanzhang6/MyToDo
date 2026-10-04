@@ -13,43 +13,11 @@ export function initBall(): void {
     document.body.classList.add("ball-window");
     // 球窗里球视图常驻（HTML 自带 hidden 属性，必须显式摘掉）
     document.getElementById("view-ball")!.hidden = false;
-    // 球窗：按住位移 ≤4px = 点击展开；超阈值 = 交给系统拖拽
-    // （贴边由 Rust 守护线程维持不变式「可见即贴边」；前端只报拖拽态与点击展开）
-    const ball = document.getElementById("ball")!;
-    let sx = 0;
-    let sy = 0;
-    let dragging = false;
-
-    ball.addEventListener("mousedown", (e) => {
+    // 拖拽/点击判定全部在 Rust 自绘拖拽线程里（松手瞬间判定），前端只报按下
+    document.getElementById("ball")!.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
-      invoke("set_ball_dragging", { on: true }).catch(() => {});
-      sx = e.clientX;
-      sy = e.clientY;
-      dragging = false;
-      const onMove = (m: MouseEvent) => {
-        if (dragging) return;
-        if (Math.abs(m.clientX - sx) > 4 || Math.abs(m.clientY - sy) > 4) {
-          dragging = true;
-          cleanup();
-          cur.startDragging();
-        }
-      };
-      const onUp = () => {
-        cleanup();
-        if (!dragging) {
-          invoke("set_ball_mode", { on: false })
-            .catch((err) => showTip(String(err)));
-        }
-        // 拖拽松手的贴边由守护线程按「静止两拍」自动接管，前端无需处理
-      };
-      const cleanup = () => {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      };
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
+      invoke("start_ball_drag").catch((err) => showTip(String(err)));
     });
-
     return;
   }
 
@@ -59,7 +27,6 @@ export function initBall(): void {
     invoke("set_ball_mode", { on: true }).catch((err) => showTip(String(err)));
   });
 }
-
 
 /** refresh 回流：球窗渲染球面；主窗无需处理（收球时主窗整体隐藏） */
 export function renderBall(state: StateDto): void {

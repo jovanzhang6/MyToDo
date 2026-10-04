@@ -235,10 +235,10 @@ pub fn set_ball_mode(app: AppHandle, on: bool) -> Result<(), String> {
     app.emit("state-changed", ()).map_err(|e| e.to_string())
 }
 
-/// 球窗 mousedown 时置位拖拽态（守护线程按静止两拍判定松手）。
+/// 球窗 mousedown 调用：进入自绘拖拽（松手自动判定点击展开/贴边）。
 #[tauri::command]
-pub fn set_ball_dragging(on: bool) {
-    crate::window::set_ball_dragging(on);
+pub fn start_ball_drag(app: AppHandle) {
+    crate::window::start_ball_drag(app);
 }
 
 static HIDE_TIP_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

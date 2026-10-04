@@ -655,15 +655,16 @@ const Widget: React.FC<{
   t: number;
   fps: number;
   ox: number;
+  oy: number;
   scale: number;
   opacity: number;
   showStats: boolean;
-}> = ({ t, fps, ox, scale, opacity, showStats }) => (
+}> = ({ t, fps, ox, oy, scale, opacity, showStats }) => (
   <div
     style={{
       position: "absolute",
       left: ox,
-      top: OY,
+      top: oy,
       width: 300,
       height: 520,
       transform: `scale(${scale})`,
@@ -762,9 +763,14 @@ export const Promo: React.FC = () => {
   const expand = interpolate(f, [T_EXPAND, T_EXPAND + 26], [0, 1], { ...clamp, easing: easeIO });
   const m = Math.min(morph, 1 - expand);
   const wScale = WS * (1 - m * 0.93);
-  const wOx = homeX + m * (2137 - homeX);
+  /* 中心锚定：窗中心从原位水平直线滑到球的停靠点（等高 540），缩放围绕中心收——杜绝向角落飞的观感 */
   const enterIn = interpolate(f, [0, 18], [0, 1], { ...clamp, easing: easeOut });
-  const wOy = OY + (1 - enterIn) * 44 + m * (530 - OY);
+  const restCx = homeX + 150 * WS;
+  const restCy = OY + (1 - enterIn) * 44 + 260 * WS;
+  const cxm = restCx + m * (2143 - restCx);
+  const cym = restCy + m * (540 - restCy);
+  const wOx = cxm - 150 * wScale;
+  const wOy = cym - 260 * wScale;
   const wOpacity =
     f < T_BALL
       ? interpolate(f, [0, 16], [0, 1], clamp)
@@ -878,6 +884,7 @@ export const Promo: React.FC = () => {
             t={f}
             fps={fps}
             ox={wOx}
+            oy={wOy}
             scale={wScale}
             opacity={finalOpacity}
             showStats={showStats}

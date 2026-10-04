@@ -351,7 +351,7 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
         let bsize = ball.outer_size().map(|s| (s.width, s.height));
         let bscale = ball.scale_factor().unwrap_or(1.0);
         eprintln!(
-            "[球] 收球 主窗隐藏，两段动画就位 ({},{})→边({},{})→贴({},{}) 尺寸={bsize:?} scale={bscale}",
+            "[球] 收球 主窗隐藏，两段动画就位 ({},{})→边({},{})→贴({},{}) 尺寸={bsize:?} scale={bscale} 客户区={csize:?} 客户区={csize:?}",
             pos.x, pos.y, edge_x, edge_y, dock_x, dock_y
         );
     } else {
@@ -379,6 +379,15 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
             target.0 + d_w,
             target.1 + d_h,
         ));
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        let after = (
+            main.inner_size().map(|s| (s.width, s.height)),
+            main.outer_size().map(|s| (s.width, s.height)),
+        );
+        eprintln!(
+            "[球] 展开尺寸 目标客户区=({},{}) 边框差=({d_w},{d_h}) 落地后 内/外={after:?}",
+            target.0, target.1
+        );
         // 出屏钳位：主窗右/下边缘不越出球所在显示器
         if let Ok(Some(monitor)) = ball.current_monitor() {
             let m_w = monitor.size().width as i32;

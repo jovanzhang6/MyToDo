@@ -241,6 +241,20 @@ pub fn start_ball_drag(app: AppHandle) {
     crate::window::start_ball_drag(app);
 }
 
+/// 悬停滑出：贴点位 → 同边全可见。
+#[tauri::command]
+pub fn undock_ball(app: AppHandle) -> Result<(), String> {
+    crate::window::undock_now(&app);
+    Ok(())
+}
+
+/// 悬停移开/松手贴边：滑回贴点位。
+#[tauri::command]
+pub fn dock_ball(app: AppHandle) -> Result<(), String> {
+    crate::window::dock_now(&app);
+    Ok(())
+}
+
 static HIDE_TIP_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// 关闭按钮 = 隐藏到托盘（应用不退出）；每次运行首次隐藏时给一条系统通知反馈。

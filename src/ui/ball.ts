@@ -14,9 +14,17 @@ export function initBall(): void {
     // 球窗里球视图常驻（HTML 自带 hidden 属性，必须显式摘掉）
     document.getElementById("view-ball")!.hidden = false;
     // 拖拽/点击判定全部在 Rust 自绘拖拽线程里（松手瞬间判定），前端只报按下
-    document.getElementById("ball")!.addEventListener("mousedown", (e) => {
+    const ball = document.getElementById("ball")!;
+    ball.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
       invoke("start_ball_drag").catch((err) => showTip(String(err)));
+    });
+    // 悬停贴边球 → 平滑滑出全露；移开 → 贴回（Rust 侧有拖拽态守卫）
+    ball.addEventListener("mouseenter", () => {
+      invoke("undock_ball").catch(() => {});
+    });
+    ball.addEventListener("mouseleave", () => {
+      invoke("dock_ball").catch(() => {});
     });
     return;
   }

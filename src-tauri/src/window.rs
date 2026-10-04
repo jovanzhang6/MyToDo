@@ -69,11 +69,14 @@ pub fn set_border_none(hwnd_raw: *mut core::ffi::c_void) {
 }
 
 static BALL_DRAGGING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// 悬停滑出态：true 时守护线程暂停贴边强制（用户正在看全露的球）
+static BALL_UNDOCKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static BALL_LAST_POS: std::sync::Mutex<Option<(i32, i32)>> = std::sync::Mutex::new(None);
 static BALL_STABLE_TICKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 /// 悬浮球守护线程（400ms 一拍）维持不变式：**球窗可见 = 必然处于贴点位**。
 /// - 拖拽中：连续两拍位置静止 → 视为松手，清除拖拽态
+/// - 悬停滑出态：守护线程暂停强制（用户正在看）
 /// - 非拖拽且不在贴点位 → 平滑滑回贴点位（拖到中间/任何漂移都会被拉回）
 pub fn start_ball_watcher(app: &AppHandle) {
     use std::sync::atomic::Ordering;
@@ -89,7 +92,7 @@ pub fn start_ball_watcher(app: &AppHandle) {
         let Ok(pos) = ball.outer_position() else {
             continue;
         };
-        if BALL_DRAGGING.load(Ordering::SeqCst) {
+        if BALL_DRAGGING.load(Ordering::SeqCst) || BALL_UNDOCKED.load(Ordering::SeqCst) {
             let mut last = BALL_LAST_POS.lock().unwrap();
             if *last == Some((pos.x, pos.y)) {
                 let n = BALL_STABLE_TICKS.fetch_add(1, Ordering::SeqCst) + 1;
@@ -124,8 +127,41 @@ pub fn start_ball_watcher(app: &AppHandle) {
     });
 }
 
-/// 立即贴边（拖拽松手/守护兜底共用）：球窗可见时滑向贴点位。
+/// 立即贴边（拖拽松手/悬停移开/守护兜底共用）：滑向贴点位，解除悬停态。
 pub fn dock_now(app: &AppHandle) {
+    let Some(ball) = app.get_webview_window("ball") else {
+        return;
+    };
+    // 拖拽进行中不插手（守护线程同样跳过）
+    if BALL_DRAGGING.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    if !ball.is_visible().unwrap_or(false) {
+        return;
+    }
+    let (Ok(pos), Ok(size)) = (ball.outer_position(), ball.outer_size()) else {
+        return;
+    };
+    let Some(Some(mon)) = ball.current_monitor().ok() else {
+        return;
+    };
+    let m = (
+        mon.position().x,
+        mon.position().y,
+        mon.size().width,
+        mon.size().height,
+    );
+    let (x, y) = dock_target(m, (pos.x, pos.y, size.width, size.height));
+    glide_ball(app, x, y);
+    BALL_UNDOCKED.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// 悬停滑出：贴点位 → 同边全可见（动画），守护线程暂停强制直至重新贴边。
+pub fn undock_now(app: &AppHandle) {
+    // 拖拽进行中不插手
+    if BALL_DRAGGING.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
     let Some(ball) = app.get_webview_window("ball") else {
         return;
     };
@@ -144,7 +180,10 @@ pub fn dock_now(app: &AppHandle) {
         mon.size().width,
         mon.size().height,
     );
-    let (x, y) = dock_target(m, (pos.x, pos.y, size.width, size.height));
+    let dock_left = pos.x + size.width as i32 / 2 < m.0 + m.2 as i32 / 2;
+    let x = if dock_left { m.0 } else { m.0 + m.2 as i32 - size.width as i32 };
+    let y = pos.y.clamp(m.1, m.1 + m.3 as i32 - size.height as i32);
+    BALL_UNDOCKED.store(true, std::sync::atomic::Ordering::SeqCst);
     glide_ball(app, x, y);
 }
 

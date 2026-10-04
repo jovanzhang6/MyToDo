@@ -100,6 +100,8 @@ pub fn run() {
             commands::set_autostart,
             commands::set_ball_mode,
             commands::start_ball_drag,
+            commands::dock_ball,
+            commands::undock_ball,
             commands::log_frontend,
             commands::hide_window
         ])

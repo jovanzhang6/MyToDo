@@ -1,954 +1,747 @@
 import React from "react";
 import {
   AbsoluteFill,
-  Audio,
   Easing,
   interpolate,
   spring,
-  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
 
 /* ============================================================
-   MyToDo 宣传片 v4 —— 「一块屏幕」
-   视觉主角：一块悬浮的屏幕（圆角 + 投影 + 屏幕高光），
-   全部产品画面都发生在屏幕里；悬浮球从屏幕中飞出落到背景上。
-   版式：明亮画廊 / 编辑排版，serif 大字 + 角标字幕系统。
+   MyToDo 宣传片 v5 —— 「真实界面」
+   原则：画面里的每一个像素都来自 styles.css 的真实值。
+   一块 300×520 的磨砂玻璃小窗按 1.7 倍浮在苹果式浅灰舞台
+   上，光标完成全部操作：输入回车加任务、选限时刻 +1天、
+   勾选沉底、收球贴边、悬停展开、切统计页。无配乐。
    ============================================================ */
 
-const IVORY = "#F4F1E8";
-const IVORY2 = "#E9E4D4";
-const INK = "#1C1B18";
-const DIM = "#8A8474";
-const GREEN = "#177A53";
-const GREEN_D = "#0E5C3F";
-const GREEN_L = "#E3F0E8";
-const AMBER = "#A9720F";
-const AMBER_L = "#F7ECDA";
-const GRAY_L = "#ECE8DC";
-const SCREEN = "#FCFBF7";
+/* ── 真实 UI 色板（styles.css 原值） ── */
+const ACCENT = "#3d8bd4";
+const INK = "#1c2b3a";
+const DIM = "#5b7189";
+const GLASS = "rgba(235,245,253,0.88)";
+const ROW_BG = "rgba(255,255,255,0.46)";
+const ROW_BORDER = "rgba(130,160,190,0.18)";
+const CARD_BG = "rgba(255,255,255,0.5)";
+const CARD_BORDER = "rgba(130,160,190,0.18)";
+const TRACK = "rgba(120,150,180,0.15)";
+const AMBER_C = "#a06a1c";
+const AMBER_BG = "rgba(212,150,61,0.16)";
+const GREEN = "#58a942";
 
-const SERIF = `Georgia, "Times New Roman", "Microsoft YaHei", serif`;
+/* ── 苹果式舞台 ── */
+const STAGE = "#f5f5f7";
+const A_INK = "#1d1d1f";
+const A_DIM = "#86868b";
+
 const SANS = `"Segoe UI", "Microsoft YaHei", system-ui, sans-serif`;
-const MONO = `Consolas, "Courier New", monospace`;
 
 const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
+const easeIO = Easing.inOut(Easing.cubic);
 const easeOut = Easing.out(Easing.cubic);
-const easeInOut = Easing.inOut(Easing.cubic);
 
-/* ---------- 通用 ---------- */
+/* ── 几何常量 ──
+   小窗 300×520（styles.css 真实逻辑尺寸），片内放大 WS 倍 */
+const WS = 1.85;
+const OY = Math.round((1080 - 520 * WS) / 2); // 窗顶（垂直居中）
+const ROW_H = 38; // 行高 34 + margin 4
+const LIST_TOP = 40;
 
-const Ball: React.FC<{ d: number; badge?: string; badgeScale?: number }> = ({
-  d,
-  badge,
-  badgeScale = 1,
-}) => (
-  <div
-    style={{
-      position: "relative",
-      width: d,
-      height: d,
-      borderRadius: "50%",
-      background: `radial-gradient(circle at 32% 26%, #35A87B, ${GREEN} 55%, ${GREEN_D})`,
-      boxShadow: `0 ${d * 0.16}px ${d * 0.42}px rgba(14,92,63,0.38), inset 0 -${
-        d * 0.07
-      }px ${d * 0.14}px rgba(0,0,0,0.20)`,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    <svg width={d * 0.52} height={d * 0.52} viewBox="0 0 100 100">
-      <path
-        d="M28 53 L44 68 L73 34"
-        stroke="#fff"
-        strokeWidth={10}
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-    {badge !== undefined && (
-      <div
-        style={{
-          position: "absolute",
-          right: -d * 0.08,
-          top: -d * 0.08,
-          background: "#fff",
-          color: GREEN_D,
-          fontFamily: MONO,
-          fontWeight: 700,
-          fontSize: d * 0.19,
-          lineHeight: 1,
-          padding: d * 0.05,
-          borderRadius: 999,
-          border: `2px solid ${GREEN_L}`,
-          boxShadow: "0 6px 16px rgba(28,27,24,0.18)",
-          transform: `scale(${badgeScale})`,
-        }}
-      >
-        {badge}
-      </div>
-    )}
-  </div>
-);
+/* 事件帧 */
+const T_TYPE = 106; // 开始输入
+const T_KIND = 152; // 点「限时」
+const T_PLUS1 = 158; // 点「+1天」×2
+const T_ADD = 176; // 点 ✓ 添加（A1）
+const T_CHECK1 = 240; // 勾选 A
+const T_CHECK2 = 286; // 勾选 D
+const T_BALL = 350; // 点标题栏 ◎
+const T_HOVER = 425; // 悬停球滑出
+const T_EXPAND = 452; // 点球展开
+const T_STATS = 486; // 点 📊
+const T_END = 570; // 收尾
 
-/* 悬浮的屏幕：无硬件、无支架，纯一块面 */
-const Screen: React.FC<{
-  x?: number;
-  y?: number;
-  s?: number;
-  swing?: number;
-  children: React.ReactNode;
-}> = ({ x = 0, y = 0, s = 1, swing = 0, children }) => (
-  <div
-    style={{
-      position: "absolute",
-      left: 385,
-      top: 158,
-      width: 1150,
-      height: 700,
-      transform: `translate(${x}px, ${y}px) scale(${s})`,
-      transformOrigin: "center center",
-    }}
-  >
-    {/* 环境辉光 */}
-    <div
-      style={{
-        position: "absolute",
-        inset: -90,
-        borderRadius: 70,
-        background:
-          "radial-gradient(closest-side, rgba(23,122,83,0.13), transparent)",
-        filter: "blur(28px)",
-      }}
-    />
-    {/* 屏幕本体 */}
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100%",
-        borderRadius: 24,
-        overflow: "hidden",
-        background: SCREEN,
-        border: "1px solid rgba(28,27,24,0.10)",
-        boxShadow:
-          "0 90px 170px rgba(28,27,24,0.26), 0 30px 60px rgba(28,27,24,0.16), inset 0 1px 0 rgba(255,255,255,0.7)",
-        transform: `perspective(1600px) rotateY(${swing}deg)`,
-        transformOrigin: "right center",
-      }}
-    >
-      {children}
-      {/* 屏幕高光 */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-          background:
-            "linear-gradient(112deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.04) 26%, transparent 42%)",
-        }}
-      />
-    </div>
-  </div>
-);
+/* ── 工具 ── */
+const guardedSpring = (
+  t: number,
+  at: number,
+  fps: number,
+  damping = 16,
+  stiffness = 110
+) => (t <= at ? 0 : spring({ frame: t - at, fps, config: { damping, stiffness } }));
 
-/* 任务类型小徽章 */
-const KIND_STYLE: Record<string, { label: string; c: string; bg: string }> = {
-  daily: { label: "每日", c: GREEN_D, bg: GREEN_L },
-  due: { label: "限时", c: AMBER, bg: AMBER_L },
-  any: { label: "不限时", c: "#5D594E", bg: GRAY_L },
+const fx = (ix: number, ox: number) => ox + ix * WS;
+const fy = (iy: number) => OY + iy * WS;
+
+/* ── 光标（macOS 式黑箭头） ── */
+type Seg = [number, number, number, number, number, number];
+const CURSOR_SEGS: Seg[] = [
+  // t0,x0,y0 → t1,x1,y1（帧坐标）
+  [60, 1560, 1180, 100, fx(140, 235), fy(492)],
+  [140, fx(140, 235), fy(492), 150, fx(149, 235), fy(433)],
+  [150, fx(149, 235), fy(433), 158, fx(170, 235), fy(459)],
+  [158, fx(170, 235), fy(459), 166, fx(170, 235), fy(459)],
+  [166, fx(170, 235), fy(459), 174, fx(273, 235), fy(492)],
+  [186, fx(273, 235), fy(492), 208, fx(300, 235), fy(560)],
+  [218, fx(300, 235), fy(560), 234, fx(17, 235), fy(58)],
+  [260, fx(17, 235), fy(58), 278, fx(17, 235), fy(134)],
+  [296, fx(17, 235), fy(134), 312, fx(60, 235), fy(210)],
+  [330, fx(60, 235), fy(210), 346, fx(173, 235), fy(19)],
+  [356, fx(173, 235), fy(19), 396, 1830, 520],
+  [396, 1830, 520, 430, 2082, 540],
+  [430, 2082, 540, 448, 2082, 540],
+  [456, 2082, 540, 480, fx(199, 235), fy(19)],
+  [490, fx(199, 235), fy(19), 508, fx(230, 235), fy(60)],
+];
+const CLICKS = [102, 152, 158, 166, 176, 240, 286, 350, 452, 486];
+
+const cursorPos = (t: number): [number, number] => {
+  if (t <= CURSOR_SEGS[0][0]) return [CURSOR_SEGS[0][1], CURSOR_SEGS[0][2]];
+  for (const s of CURSOR_SEGS) {
+    if (t >= s[0] && t <= s[3]) {
+      const p = interpolate(t, [s[0], s[3]], [0, 1], { ...clamp, easing: easeIO });
+      return [s[1] + (s[4] - s[1]) * p, s[2] + (s[5] - s[2]) * p];
+    }
+  }
+  const last = CURSOR_SEGS[CURSOR_SEGS.length - 1];
+  return [last[4], last[5]];
 };
 
-const Chip: React.FC<{ kind: string }> = ({ kind }) => {
-  const k = KIND_STYLE[kind];
+const Cursor: React.FC<{ f: number }> = ({ f }) => {
+  const [x, y] = cursorPos(f);
+  const opacity = interpolate(f, [56, 64, 560, 576], [0, 1, 1, 0], clamp);
+  let press = 0;
+  for (const c of CLICKS) {
+    const a = f - c;
+    if (a >= 0 && a < 8) press = Math.max(press, 1 - a / 8);
+  }
   return (
-    <span
-      style={{
-        fontFamily: SANS,
-        fontSize: 16,
-        fontWeight: 600,
-        color: k.c,
-        background: k.bg,
-        borderRadius: 999,
-        padding: "5px 14px",
-        letterSpacing: 1,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {k.label}
-    </span>
-  );
-};
-
-/* 屏幕底部输入条 */
-const InputBar: React.FC<{ t: number; at?: number }> = ({ t, at = 30 }) => (
-  <div
-    style={{
-      position: "absolute",
-      left: 64,
-      right: 64,
-      bottom: 38,
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-      border: "1.5px solid rgba(28,27,24,0.13)",
-      borderRadius: 999,
-      padding: "13px 22px",
-      background: "#fff",
-      boxShadow: "0 8px 20px rgba(28,27,24,0.05)",
-      opacity: interpolate(t, [at, at + 14], [0, 1], clamp),
-    }}
-  >
-    <div
-      style={{
-        width: 24,
-        height: 24,
-        borderRadius: "50%",
-        border: "2px solid #C9C3B4",
-      }}
-    />
-    <span style={{ fontSize: 19, color: "#B7B1A0" }}>记一件要做的事…</span>
-    <span
-      style={{
-        marginLeft: "auto",
-        fontFamily: MONO,
-        fontSize: 13,
-        color: "#B7B1A0",
-        border: "1px solid rgba(28,27,24,0.16)",
-        borderRadius: 6,
-        padding: "2px 8px",
-      }}
-    >
-      Enter
-    </span>
-  </div>
-);
-
-/* 屏幕内 UI 一：今日清单 */
-const TodayList: React.FC<{ t: number; collapse?: number }> = ({
-  t,
-  collapse = 0,
-}) => {
-  const { fps } = useVideoConfig();
-  const doneAt = [70, -1, -1, 92, -1];
-  const doneCount = (t > 70 ? 1 : 0) + (t > 92 ? 1 : 0);
-  const rows = [
-    { kind: "daily", text: "晨间拉伸 15 分钟", sub: "" },
-    { kind: "daily", text: "回复客户邮件", sub: "" },
-    { kind: "due", text: "交季度报告", sub: "明天到期" },
-    { kind: "any", text: "整理灵感清单", sub: "" },
-    { kind: "daily", text: "夜间复盘 10 分钟", sub: "" },
-  ];
-  const toastIn = interpolate(t, [116, 130], [0, 1], {
-    ...clamp,
-    easing: easeOut,
-  });
-  const toastOut = interpolate(t, [168, 180], [1, 0], clamp);
-  const toast = Math.min(toastIn, toastOut);
-  return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        padding: "52px 64px",
-        fontFamily: SANS,
-        transform: `translate(${collapse * 300}px, ${collapse * 60}px) scale(${
-          1 - collapse * 0.45
-        })`,
-        transformOrigin: "70% 45%",
-        opacity: 1 - collapse * 0.85,
-      }}
-    >
-      {/* 头部 */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: "space-between",
-          marginBottom: 26,
-          opacity: interpolate(t, [4, 14], [0, 1], clamp),
-        }}
-      >
-        <div>
-          <div style={{ fontFamily: SERIF, fontSize: 46, color: INK }}>
-            Today
-          </div>
-          <div style={{ fontSize: 19, color: DIM, marginTop: 4 }}>
-            10 月 4 日 · 周日
-          </div>
-        </div>
-        <div
-          style={{
-            background: GREEN_L,
-            color: GREEN_D,
-            fontFamily: MONO,
-            fontSize: 20,
-            fontWeight: 700,
-            borderRadius: 999,
-            padding: "8px 20px",
-          }}
-        >
-          {doneCount} / 5
-        </div>
-      </div>
-      {/* 任务行 */}
-      {rows.map((r, i) => {
-        const rowIn = interpolate(t, [8 + i * 5, 22 + i * 5], [0, 1], {
-          ...clamp,
-          easing: easeOut,
-        });
-        const done = doneAt[i] >= 0 && t > doneAt[i];
-        const pop = spring({
-          frame: t - doneAt[i],
-          fps,
-          config: { damping: 12, stiffness: 220 },
-        });
-        const strike = interpolate(t, [doneAt[i] + 4, doneAt[i] + 16], [0, 1], {
-          ...clamp,
-          easing: easeOut,
-        });
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity }}>
+      {CLICKS.map((c, i) => {
+        const age = f - c;
+        if (age < 0 || age > 16) return null;
+        const [cx, cy] = cursorPos(c);
+        const p = age / 16;
         return (
           <div
             key={i}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 22,
-              padding: "21px 6px",
-              borderTop: "1px solid rgba(28,27,24,0.09)",
-              opacity: rowIn,
-              transform: `translateX(${(1 - rowIn) * 26}px)`,
+              position: "absolute",
+              left: cx - 14 - p * 16,
+              top: cy - 14 - p * 16,
+              width: 28 + p * 32,
+              height: 28 + p * 32,
+              borderRadius: "50%",
+              border: `2px solid rgba(61,139,212,${0.55 * (1 - p)})`,
             }}
-          >
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                flexShrink: 0,
-                border: done ? `2px solid ${GREEN}` : "2px solid #C9C3B4",
-                background: done ? GREEN : "transparent",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                transform: `scale(${done ? Math.max(pop, 0.001) : 1})`,
-              }}
-            >
-              {done && (
-                <svg width={20} height={20} viewBox="0 0 100 100">
-                  <path
-                    d="M28 53 L44 68 L73 34"
-                    stroke="#fff"
-                    strokeWidth={11}
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-            </div>
-            <div style={{ position: "relative", flex: 1 }}>
-              <div style={{ fontSize: 25, color: INK, fontWeight: 500 }}>
-                {r.text}
-                {r.sub && (
-                  <span style={{ fontSize: 19, color: AMBER, marginLeft: 12 }}>
-                    {r.sub}
-                  </span>
-                )}
-              </div>
-              {done && (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: "55%",
-                    height: 2.5,
-                    width: `${strike * 100}%`,
-                    background: "rgba(28,27,24,0.55)",
-                    borderRadius: 2,
-                  }}
-                />
-              )}
-            </div>
-            <Chip kind={r.kind} />
-          </div>
+          />
         );
       })}
-      <InputBar t={t} at={34} />
-      {/* 到期 toast */}
-      {toast > 0.01 && (
-        <div
-          style={{
-            position: "absolute",
-            top: 30,
-            right: 36,
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-            background: "#fff",
-            borderRadius: 14,
-            padding: "16px 24px 16px 18px",
-            boxShadow: "0 18px 44px rgba(28,27,24,0.22)",
-            borderLeft: `5px solid ${GREEN}`,
-            opacity: toast,
-            transform: `translateY(${(1 - toast) * -90}px)`,
-          }}
-        >
-          <Ball d={34} />
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: INK }}>
-              到期提醒
-            </div>
-            <div style={{ fontSize: 15, color: DIM, marginTop: 2 }}>
-              交季度报告 · 今天到期
-            </div>
-          </div>
-        </div>
-      )}
+      <div
+        style={{
+          position: "absolute",
+          left: x,
+          top: y,
+          transform: `scale(${1 - press * 0.18})`,
+          transformOrigin: "2px 2px",
+          filter: "drop-shadow(0 2px 5px rgba(0,0,0,0.25))",
+        }}
+      >
+        <svg width="23" height="26" viewBox="0 0 23 26">
+          <path
+            d="M4 1.5 L4 20.5 L8.9 16.4 L11.8 23.2 L15.4 21.6 L12.5 15 L19 14.4 Z"
+            fill="#151515"
+            stroke="#fff"
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
     </div>
   );
 };
 
-/* 屏幕内 UI 二：三种生命周期 */
-const Lifecycle: React.FC<{ t: number }> = ({ t }) => (
+/* ── 悬浮球（ball-window 真实样式） ── */
+const BallDisc: React.FC<{
+  x: number;
+  y: number;
+  size: number;
+  pct: number;
+  count: string;
+  opacity: number;
+}> = ({ x, y, size, pct, count, opacity }) => (
   <div
     style={{
       position: "absolute",
-      inset: 0,
-      padding: "60px 72px",
-      fontFamily: SANS,
+      left: x - size / 2,
+      top: y - size / 2,
+      width: size,
+      height: size,
+      borderRadius: "50%",
+      background: `conic-gradient(rgba(255,255,255,0.92) ${pct}%, transparent 0), linear-gradient(160deg, #6aa7dd 0%, #3d7fc0 100%)`,
+      boxShadow: "0 18px 44px rgba(61,127,192,0.4)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      opacity,
     }}
   >
-    <div style={{ marginBottom: 30 }}>
-      <div style={{ fontFamily: SERIF, fontSize: 44, color: INK }}>
-        三种生命周期
-      </div>
-      <div style={{ fontSize: 19, color: DIM, marginTop: 6 }}>
-        每日重来 · 限时归档 · 随手记 —— 还能互相转化
-      </div>
+    <div
+      style={{
+        width: "72%",
+        height: "72%",
+        borderRadius: "50%",
+        background: "rgba(21,48,78,0.88)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+      }}
+    >
+      <span
+        style={{
+          fontSize: size * 0.2,
+          fontWeight: 700,
+          lineHeight: 1,
+          color: "#fff",
+          fontFamily: SANS,
+        }}
+      >
+        {count}
+      </span>
+      <small
+        style={{
+          fontSize: size * 0.11,
+          color: "rgba(255,255,255,0.75)",
+          lineHeight: 1,
+          fontFamily: SANS,
+        }}
+      >
+        待办
+      </small>
     </div>
-    {[
-      { kind: "daily", note: "每天 00:00 自动重来" },
-      { kind: "due", note: "过期自动归档" },
-      { kind: "any", note: "想到就记，没有压力" },
-    ].map((r, i) => {
-      const rowIn = interpolate(t, [10 + i * 9, 26 + i * 9], [0, 1], {
-        ...clamp,
-        easing: easeOut,
-      });
-      /* 第一行演示「每日 → 限时」转化 */
-      const morphA = interpolate(t, [96, 106], [1, 0], clamp);
-      const morphB = interpolate(t, [106, 116], [0, 1], clamp);
-      const isMorphRow = i === 0;
-      const textB = "加练一组卷腹 · 10 月 6 日前";
-      return (
-        <div
-          key={i}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 28,
-            padding: "28px 10px",
-            borderTop: "1px solid rgba(28,27,24,0.09)",
-            opacity: rowIn,
-            transform: `translateX(${(1 - rowIn) * 30}px)`,
-          }}
-        >
-          <div style={{ position: "relative", width: 108, height: 34 }}>
-            {isMorphRow ? (
-              <>
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    opacity: morphA,
-                    transform: `scaleX(${Math.max(morphA, 0.001)})`,
-                  }}
-                >
-                  <Chip kind="daily" />
-                </div>
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    opacity: morphB,
-                    transform: `scaleX(${Math.max(morphB, 0.001)})`,
-                  }}
-                >
-                  <Chip kind="due" />
-                </div>
-              </>
-            ) : (
-              <Chip kind={r.kind} />
-            )}
-          </div>
-          <div style={{ flex: 1, position: "relative" }}>
-            {isMorphRow ? (
-              <>
-                <div
-                  style={{
-                    fontSize: 28,
-                    color: INK,
-                    fontWeight: 500,
-                    opacity: morphA,
-                  }}
-                >
-                  晨间拉伸 15 分钟
-                </div>
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    fontSize: 28,
-                    color: INK,
-                    fontWeight: 500,
-                    opacity: morphB,
-                  }}
-                >
-                  {textB}
-                </div>
-              </>
-            ) : (
-              <div style={{ fontSize: 28, color: INK, fontWeight: 500 }}>
-                {i === 1 ? "交季度报告 · 10 月 5 日" : "整理灵感清单"}
-              </div>
-            )}
-          </div>
-          <div
-            style={{
-              fontSize: 19,
-              color: isMorphRow && morphB > 0.5 ? AMBER : DIM,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {isMorphRow ? (morphB > 0.5 ? "截止 10 月 6 日" : r.note) : r.note}
-          </div>
-        </div>
-      );
-    })}
-    <InputBar t={t} at={40} />
   </div>
 );
 
-/* 屏幕内 UI 三：统计 */
-const StatsDash: React.FC<{ t: number }> = ({ t }) => {
-  const pct = Math.round(interpolate(t, [18, 52], [0, 92], clamp));
-  const streak = Math.round(interpolate(t, [26, 60], [0, 21], clamp));
-  const onTime = Math.round(interpolate(t, [34, 68], [0, 98], clamp));
-  const bars = [0.45, 0.7, 0.55, 0.85, 0.65, 0.95, 0.4];
-  const heat = [0.16, 0.4, 0.62, 0.85, 0.5, 0.74, 0.28, 0.92, 0.55, 0.68];
+/* ── 标题栏图标（index.html 原版 SVG） ── */
+const TB_ICONS: Record<string, React.ReactNode> = {
+  ball: (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={2}>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  stats: (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+      <path d="M5 20V10M12 20V4M19 20v-7" />
+    </svg>
+  ),
+  settings: (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+      <path d="M4 7h8M18 7h2M4 17h2M12 17h8" />
+      <circle cx="15" cy="7" r="2.5" />
+      <circle cx="9" cy="17" r="2.5" />
+    </svg>
+  ),
+  pin: (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 16.5V21" />
+      <path d="M9 3.5h6l-.8 6.8 2.8 2.9v1.8H7v-1.8l2.8-2.9L9 3.5z" />
+    </svg>
+  ),
+  close: (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  ),
+};
+
+/* ── 任务行 ── */
+const TaskRow: React.FC<{
+  slotY: number;
+  text: string;
+  badge: string;
+  badgeClass: "open" | "daily" | "limited";
+  doneAt: number; // <0 表示未勾选
+  t: number;
+  fps: number;
+  appearAt: number; // <0 无出场动画
+}> = ({ slotY, text, badge, badgeClass, doneAt, t, fps, appearAt }) => {
+  const done = doneAt >= 0 && t >= doneAt;
+  const pop = done ? Math.max(guardedSpring(t, doneAt, fps, 12, 200), 0.001) : 1;
+  const strike = done
+    ? interpolate(t, [doneAt + 3, doneAt + 14], [0, 1], { ...clamp, easing: easeOut })
+    : 0;
+  const appear =
+    appearAt >= 0 ? interpolate(t, [appearAt, appearAt + 14], [0, 1], { ...clamp, easing: easeOut }) : 1;
+  const badgeStyle: React.CSSProperties =
+    badgeClass === "daily"
+      ? { background: "rgba(61,139,212,0.15)", color: ACCENT }
+      : badgeClass === "limited"
+        ? { background: AMBER_BG, color: AMBER_C }
+        : { background: "rgba(120,150,180,0.14)", color: DIM };
   return (
     <div
       style={{
         position: "absolute",
-        inset: 0,
-        padding: "48px 64px",
+        left: 8,
+        right: 8,
+        top: slotY,
+        height: 34,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "0 8px",
+        borderRadius: 8,
+        background: done ? "rgba(255,255,255,0.22)" : ROW_BG,
+        border: `1px solid ${done ? "rgba(130,160,190,0.1)" : ROW_BORDER}`,
         fontFamily: SANS,
+        opacity: appear,
       }}
     >
-      <div style={{ marginBottom: 22 }}>
-        <div style={{ fontFamily: SERIF, fontSize: 44, color: INK }}>
-          这一个月
-        </div>
-        <div style={{ fontSize: 19, color: DIM, marginTop: 4 }}>
-          坚持，看得见
-        </div>
+      {/* 复选框（原生 15px accent 蓝） */}
+      <div
+        style={{
+          width: 15,
+          height: 15,
+          flex: "none",
+          borderRadius: 3,
+          background: done ? ACCENT : "rgba(255,255,255,0.95)",
+          border: done ? `1px solid ${ACCENT}` : "1px solid #93a7bb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transform: `scale(${pop})`,
+        }}
+      >
+        {done && (
+          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="#fff" strokeWidth={3.4} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4.5 12.8l4.6 4.4L19.5 7.2" />
+          </svg>
+        )}
       </div>
-      {/* 三个数字 */}
-      <div style={{ display: "flex", gap: 22, marginBottom: 24 }}>
-        {[
-          { v: pct, u: "%", label: "完成率", c: GREEN_D },
-          { v: streak, u: " 天", label: "连续打卡", c: INK },
-          { v: onTime, u: "%", label: "按期完成", c: INK },
-        ].map((s, i) => {
-          const tin = interpolate(t, [12 + i * 6, 24 + i * 6], [0, 1], clamp);
-          return (
-            <div
-              key={i}
-              style={{
-                flex: 1,
-                background: "#fff",
-                borderRadius: 16,
-                padding: "18px 26px",
-                border: "1px solid rgba(28,27,24,0.08)",
-                boxShadow: "0 10px 26px rgba(28,27,24,0.07)",
-                opacity: tin,
-                transform: `translateY(${(1 - tin) * 18}px)`,
-              }}
-            >
-              <div style={{ fontSize: 16, color: DIM, marginBottom: 6 }}>
-                {s.label}
-              </div>
-              <div style={{ fontFamily: SERIF, fontSize: 52, color: s.c }}>
-                {s.v}
-                <span style={{ fontSize: 24 }}>{s.u}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display: "flex", gap: 36 }}>
-        {/* 热力图 */}
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: 16,
-            padding: "18px 24px",
-            border: "1px solid rgba(28,27,24,0.08)",
-            boxShadow: "0 10px 26px rgba(28,27,24,0.07)",
-          }}
-        >
-          <div style={{ fontSize: 16, color: DIM, marginBottom: 12 }}>
-            近 30 天
-          </div>
+      <div style={{ position: "relative", flex: 1, fontSize: 13, lineHeight: 1.4, color: done ? "#46586c" : INK }}>
+        {text}
+        {done && (
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(10, 30px)",
-              gap: 8,
+              position: "absolute",
+              left: 0,
+              top: "52%",
+              height: 2.2,
+              width: `${strike * 100}%`,
+              background: "#223247",
             }}
-          >
-            {Array.from({ length: 30 }).map((_, i) => (
-              <div
-                key={i}
+          />
+        )}
+      </div>
+      <span
+        style={{
+          flex: "none",
+          fontSize: 11,
+          borderRadius: 5,
+          padding: "2px 6px",
+          border: "1px solid transparent",
+          ...badgeStyle,
+        }}
+      >
+        {badge}
+      </span>
+      <span style={{ flex: "none", color: "rgba(91,113,137,0.4)", fontSize: 14, width: 14, textAlign: "center" }}>
+        ×
+      </span>
+    </div>
+  );
+};
+
+/* ── 清单视图（view-list） ── */
+const ListView: React.FC<{ t: number; fps: number; visible: boolean }> = ({ t, fps, visible }) => {
+  /* 行序账本：base + Σ Δ·spring */
+  const A1 = T_ADD;
+  const rowDefs = [
+    { key: "A", text: "交季度报告", badge: "限时 · 后天到期", cls: "limited" as const, base: -1,
+      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: 4 }, { at: T_CHECK2, d: -1 }], doneAt: T_CHECK1, appear: A1 },
+    { key: "B", text: "整理灵感清单", badge: "不限时", cls: "open" as const, base: 0,
+      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }], doneAt: -1, appear: -1 },
+    { key: "C", text: "回复客户邮件", badge: "不限时", cls: "open" as const, base: 1,
+      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }], doneAt: -1, appear: -1 },
+    { key: "D", text: "晨间拉伸", badge: "每日", cls: "daily" as const, base: 2,
+      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }, { at: T_CHECK2, d: 2 }], doneAt: T_CHECK2, appear: -1 },
+    { key: "E", text: "夜间复盘", badge: "每日", cls: "daily" as const, base: 3,
+      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }, { at: T_CHECK2, d: -1 }], doneAt: -1, appear: -1 },
+  ];
+  const typed = "交季度报告".slice(0, Math.max(0, Math.min(5, Math.floor((t - T_TYPE) / 5))));
+  const caretOn = t >= T_TYPE && t < T_KIND + 24 && Math.floor(t / 8) % 2 === 0;
+  const limited = t >= T_KIND;
+  const plus = t >= T_PLUS1 ? (t >= T_PLUS1 + 8 ? 2 : 1) : 0;
+  const dueDate = `2026-10-0${4 + plus}`;
+  const added = t >= T_ADD;
+
+  return (
+    <div style={{ position: "absolute", inset: 0, opacity: visible ? 1 : 0 }}>
+      <main style={{ position: "absolute", top: 38, left: 0, right: 0, bottom: limited ? 106 : 78, overflow: "hidden" }}>
+        {rowDefs.map((r) => {
+          const slot =
+            r.base + r.steps.reduce((acc, s) => acc + s.d * guardedSpring(t, s.at, fps), 0);
+          return (
+            <TaskRow
+              key={r.key}
+              slotY={4 + slot * ROW_H}
+              text={r.text}
+              badge={r.badge}
+              badgeClass={r.cls}
+              doneAt={r.doneAt}
+              appearAt={r.appear}
+              t={t}
+              fps={fps}
+            />
+          );
+        })}
+      </main>
+      {/* 添加条 footer#addbar */}
+      <footer
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: limited ? 106 : 78,
+          padding: "8px 10px 10px",
+          borderTop: "1px solid rgba(255,255,255,0.5)",
+        }}
+      >
+        {/* 类型胶囊组 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6, fontSize: 12 }}>
+          {[
+            { label: "不限时", on: !limited },
+            { label: "每日", on: false },
+            { label: "限时", on: limited },
+          ].map((k) => (
+            <span
+              key={k.label}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "3px 10px",
+                borderRadius: 999,
+                background: k.on ? ACCENT : "rgba(255,255,255,0.42)",
+                border: `1px solid ${k.on ? ACCENT : "rgba(120,150,180,0.28)"}`,
+                color: k.on ? "#fff" : DIM,
+                fontFamily: SANS,
+              }}
+            >
+              {k.label}
+            </span>
+          ))}
+          {limited && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 4, whiteSpace: "nowrap" }}>
+              <span style={{ color: DIM, fontSize: 12, fontFamily: SANS }}>截止</span>
+              <span
                 style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 7,
-                  background: `rgba(23,122,83,${heat[(i * 7 + 3) % 10]})`,
-                  opacity: interpolate(t, [36 + i * 1.1, 44 + i * 1.1], [0, 1], clamp),
-                  transform: `scale(${interpolate(t, [36 + i * 1.1, 46 + i * 1.1], [0.4, 1], { ...clamp, easing: easeOut })})`,
+                  width: 84,
+                  textAlign: "center",
+                  border: "1px solid rgba(120,150,180,0.4)",
+                  borderRadius: 999,
+                  fontSize: 11,
+                  padding: "2px 6px",
+                  background: "rgba(255,255,255,0.8)",
+                  color: INK,
+                  fontFamily: SANS,
                 }}
-              />
-            ))}
-          </div>
+              >
+                {dueDate}
+              </span>
+              <span
+                style={{
+                  border: "none",
+                  background: "rgba(120,150,180,0.14)",
+                  color: DIM,
+                  borderRadius: 999,
+                  fontSize: 11,
+                  padding: "2px 8px",
+                  fontFamily: SANS,
+                }}
+              >
+                +1天
+              </span>
+            </span>
+          )}
         </div>
-        {/* 周柱状 */}
-        <div
-          style={{
-            flex: 1,
-            background: "#fff",
-            borderRadius: 16,
-            padding: "18px 24px",
-            border: "1px solid rgba(28,27,24,0.08)",
-            boxShadow: "0 10px 26px rgba(28,27,24,0.07)",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <div style={{ fontSize: 16, color: DIM, marginBottom: 12 }}>
-            本周完成
-          </div>
+        {/* 输入行 */}
+        <div style={{ display: "flex", gap: 6 }}>
           <div
             style={{
               flex: 1,
               display: "flex",
-              alignItems: "flex-end",
-              gap: 18,
-              borderBottom: "1px solid rgba(28,27,24,0.12)",
-              paddingBottom: 2,
+              alignItems: "center",
+              border: `1px solid ${t >= T_TYPE - 4 && t < T_ADD + 6 ? ACCENT : "rgba(120,150,180,0.35)"}`,
+              borderRadius: 8,
+              background: t >= T_TYPE - 4 && t < T_ADD + 6 ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.65)",
+              padding: "7px 10px",
+              fontSize: 13,
+              color: INK,
+              fontFamily: SANS,
+              height: 32,
             }}
           >
-            {bars.map((h, i) => (
-              <div
-                key={i}
-                style={{
-                  flex: 1,
-                  height: h * 130,
-                  borderRadius: "8px 8px 3px 3px",
-                  background: i === 5 ? GREEN : "#BFD8CB",
-                  transformOrigin: "bottom",
-                  transform: `scaleY(${interpolate(t, [40 + i * 4, 54 + i * 4], [0, 1], { ...clamp, easing: easeOut })})`,
-                }}
-              />
-            ))}
+            {typed}
+            {caretOn && <span style={{ color: ACCENT }}>|</span>}
+            {!typed && t < T_TYPE && (
+              <span style={{ color: DIM }}>要做点什么？回车添加</span>
+            )}
           </div>
-        </div>
-      </div>
-      <div
-        style={{
-          marginTop: 14,
-          fontSize: 13,
-          color: DIM,
-          fontStyle: "italic",
-          opacity: interpolate(t, [70, 80], [0, 1], clamp),
-        }}
-      >
-        数据为演示样例
-      </div>
-    </div>
-  );
-};
-
-/* 背景上的悬浮球（屏幕外） */
-const DeskBall: React.FC<{ t: number }> = ({ t }) => {
-  const { fps } = useVideoConfig();
-  /* 飞出路径：屏幕内 (1240, 470) → 屏幕外 (1620, 400) */
-  const fly = interpolate(t, [38, 66], [0, 1], { ...clamp, easing: easeInOut });
-  const scale = interpolate(fly, [0, 1], [0.62, 1.18], clamp);
-  const bx = interpolate(fly, [0, 1], [1240, 1620], clamp);
-  const by =
-    interpolate(fly, [0, 1], [470, 400], clamp) +
-    (fly >= 1 ? Math.sin(t / 6) * 7 : 0);
-  const pop = spring({
-    frame: t - 16,
-    fps,
-    config: { damping: 12, stiffness: 160 },
-  });
-  const appear = t >= 16 ? Math.max(pop, 0.001) : 0;
-  const shadow = interpolate(t, [58, 72], [0, 0.9], clamp);
-  const badge = t < 84 ? "3" : "2";
-  const badgePop = spring({
-    frame: t - 84,
-    fps,
-    config: { damping: 10, stiffness: 200 },
-  });
-  /* 拖尾残影 */
-  const ghosts = [0.82, 0.64].map((g, gi) => {
-    const gf = interpolate(
-      t,
-      [38, 66],
-      [0, Math.max(fly - 0.12 * (gi + 1), 0)],
-      clamp
-    );
-    if (gf <= 0 || gf >= 1) return null;
-    return (
-      <div
-        key={gi}
-        style={{
-          position: "absolute",
-          left: interpolate(gf, [0, 1], [1240, 1620], clamp) - 40 * g,
-          top: interpolate(gf, [0, 1], [470, 400], clamp) - 40 * g,
-          width: 80 * g,
-          height: 80 * g,
-          borderRadius: "50%",
-          background: GREEN,
-          opacity: 0.18 * g,
-        }}
-      />
-    );
-  });
-  return (
-    <div style={{ position: "absolute", inset: 0 }}>
-      {ghosts}
-      {/* 落在背景上的影子 */}
-      <div
-        style={{
-          position: "absolute",
-          left: bx - 90,
-          top: 566,
-          width: 180,
-          height: 34,
-          borderRadius: "50%",
-          background: `rgba(28,27,24,${0.28 * shadow})`,
-          filter: "blur(6px)",
-        }}
-      />
-      {appear > 0 && (
-        <div
-          style={{
-            position: "absolute",
-            left: bx - 73 * scale,
-            top: by - 73 * scale,
-            opacity: appear,
-            transform: `scale(${scale})`,
-          }}
-        >
-          <Ball d={146} badge={badge} badgeScale={Math.max(badgePop, 0.001)} />
-        </div>
-      )}
-      {/* 说明标签 */}
-      {(() => {
-        const lab = interpolate(t, [70, 82], [0, 1], {
-          ...clamp,
-          easing: easeOut,
-        });
-        if (lab <= 0.01) return null;
-        return (
           <div
             style={{
-              position: "absolute",
-              left: 1230,
-              top: 296,
-              opacity: lab,
-              transform: `translateY(${(1 - lab) * 14}px)`,
-              fontFamily: SANS,
+              flex: "none",
+              width: 34,
+              height: 32,
+              borderRadius: 8,
+              background: ACCENT,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              filter: t >= T_ADD - 2 && t < T_ADD + 6 ? "brightness(1.15)" : "none",
             }}
           >
-            <div style={{ fontSize: 30, fontWeight: 700, color: INK }}>
-              收进一颗球
-            </div>
-            <div style={{ fontSize: 19, color: DIM, marginTop: 6 }}>
-              贴边隐藏 · 点击展开 · 不挡屏幕
-            </div>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4.5 12.8l4.6 4.4L19.5 7.2" />
+            </svg>
           </div>
-        );
-      })()}
+        </div>
+      </footer>
     </div>
   );
 };
 
-/* 编辑排版角标系统（全程固定） */
-const Chrome: React.FC<{ f: number }> = ({ f }) => {
-  const chapters = ["开场", "任务", "生命周期", "悬浮球", "统计", "开始使用"];
-  const ch =
-    f < 100 ? 0 : f < 256 ? 1 : f < 410 ? 2 : f < 564 ? 3 : f < 656 ? 4 : 5;
-  const sec = Math.floor(f / 30) + 1;
+/* ── 统计视图（view-stats，数据与勾选剧情一致：3/5） ── */
+const StatsView: React.FC<{ t: number; fps: number; visible: boolean }> = ({ t, fps, visible }) => {
+  const st = t - T_STATS; // 视图内年龄
+  const cellCls = (i: number) => {
+    const pat = [0, 2, 1, 3, 2, 0, 1, 3, 3, 2, 1, 2, 0, 3, 2, 1, 3, 2, 3, 1, 2, 3, 0, 2, 3, 3, 1, 2, 3, 3];
+    return pat[i % 30];
+  };
+  const hmIn = (i: number) => interpolate(st, [10 + i * 0.7, 16 + i * 0.7], [0, 1], clamp);
+  const barW = (v: number, at: number) => interpolate(st, [at, at + 16], [0, v], { ...clamp, easing: easeOut });
+  const ringDeg = interpolate(st, [4, 26], [0, 60], { ...clamp, easing: easeOut });
+  const card = (i: number) => ({
+    opacity: interpolate(st, [2 + i * 3, 8 + i * 3], [0, 1], clamp),
+    transform: `translateY(${(1 - interpolate(st, [2 + i * 3, 8 + i * 3], [0, 1], { ...clamp, easing: easeOut })) * 10}px)`,
+  });
   return (
+    <div style={{ position: "absolute", inset: 0, opacity: visible ? 1 : 0, fontFamily: SANS }}>
+      <header style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px 2px", fontSize: 13, color: INK }}>
+        <span
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 6,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: DIM,
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14.5 5.5L8 12l6.5 6.5" />
+          </svg>
+        </span>
+        <b>统计</b>
+      </header>
+      <div style={{ position: "absolute", top: 36, left: 0, right: 0, bottom: 0, padding: "8px 10px 10px", display: "flex", flexDirection: "column", gap: 8, overflow: "hidden" }}>
+        {/* hero */}
+        <section style={{ ...card(0), background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 10, padding: "10px 12px", display: "flex", alignItems: "center", gap: 14 }}>
+          <div
+            style={{
+              position: "relative",
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              flex: "none",
+              background: `conic-gradient(${ACCENT} ${ringDeg}%, rgba(120,150,180,0.18) 0)`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <div style={{ position: "absolute", width: 50, height: 50, borderRadius: "50%", background: "rgba(250,253,255,0.95)" }} />
+            <span style={{ position: "relative", fontSize: 13, fontWeight: 600, color: INK }}>3/5</span>
+          </div>
+          <div>
+            <b style={{ display: "block", fontSize: 15, color: INK }}>今日完成</b>
+            <small style={{ color: DIM, fontSize: 12 }}>剩余 2 件</small>
+          </div>
+        </section>
+        {/* streak */}
+        <section style={{ ...card(1), background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 10, padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <span style={{ fontSize: 24, fontWeight: 700, color: ACCENT }}>21 天</span>
+            <small style={{ color: DIM, fontSize: 12, marginLeft: 6 }}>连续打卡</small>
+          </div>
+          <div style={{ color: DIM, fontSize: 12 }}>
+            最长纪录 <b style={{ color: INK }}>34 天</b>
+          </div>
+        </section>
+        {/* 热力图 */}
+        <section style={{ ...card(2), background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 10, padding: "10px 12px" }}>
+          <h3 style={{ fontSize: 12, fontWeight: 600, color: DIM, marginBottom: 8 }}>近 30 天</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(15, 1fr)", gap: 3 }}>
+            {Array.from({ length: 30 }).map((_, i) => {
+              const c = cellCls(i);
+              const bg =
+                c === 0
+                  ? "rgba(120,150,180,0.12)"
+                  : c === 1
+                    ? "rgba(61,139,212,0.3)"
+                    : c === 2
+                      ? "rgba(61,139,212,0.6)"
+                      : ACCENT;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    aspectRatio: "1",
+                    borderRadius: 3,
+                    background: bg,
+                    opacity: hmIn(i),
+                    transform: `scale(${hmIn(i)})`,
+                  }}
+                />
+              );
+            })}
+          </div>
+          <small style={{ color: DIM, fontSize: 11, display: "block", marginTop: 6 }}>已记录 26 天</small>
+        </section>
+        {/* 分类完成率 */}
+        <section style={{ ...card(3), background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 10, padding: "10px 12px" }}>
+          <h3 style={{ fontSize: 12, fontWeight: 600, color: DIM, marginBottom: 2 }}>分类完成率（今日）</h3>
+          {[
+            { label: "每日", v: 50, at: 14 },
+            { label: "限时", v: 100, at: 18 },
+            { label: "不限时", v: 67, at: 22 },
+          ].map((r) => (
+            <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontSize: 12, color: DIM }}>
+              <span style={{ flex: "none", width: 52 }}>{r.label}</span>
+              <div style={{ flex: 1, height: 6, borderRadius: 3, background: TRACK, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${barW(r.v, r.at)}%`, borderRadius: 3, background: ACCENT }} />
+              </div>
+              <b style={{ flex: "none", width: 38, textAlign: "right", color: INK }}>{Math.round(barW(r.v, r.at))}%</b>
+            </div>
+          ))}
+        </section>
+        {/* 任务健康 */}
+        <section style={{ ...card(4), background: CARD_BG, border: `1px solid ${CARD_BORDER}`, borderRadius: 10, padding: "10px 12px" }}>
+          <h3 style={{ fontSize: 12, fontWeight: 600, color: DIM, marginBottom: 2 }}>任务健康</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, fontSize: 12, color: DIM }}>
+            <span style={{ flex: "none", width: 62 }}>按期完成率</span>
+            <div style={{ flex: 1, height: 6, borderRadius: 3, background: TRACK, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${barW(92, 26)}%`, borderRadius: 3, background: GREEN }} />
+            </div>
+            <b style={{ flex: "none", width: 38, textAlign: "right", color: INK }}>{Math.round(barW(92, 26))}%</b>
+          </div>
+        </section>
+      </div>
+      {/* 占位：fps 引用避免未使用告警 */}
+      <span style={{ display: "none" }}>{fps}</span>
+    </div>
+  );
+};
+
+/* ── 小窗（300×520，全部真实样式值） ── */
+const Widget: React.FC<{
+  t: number;
+  fps: number;
+  ox: number;
+  scale: number;
+  opacity: number;
+  showStats: boolean;
+}> = ({ t, fps, ox, scale, opacity, showStats }) => (
+  <div
+    style={{
+      position: "absolute",
+      left: ox,
+      top: OY,
+      width: 300,
+      height: 520,
+      transform: `scale(${scale})`,
+      transformOrigin: "0 0",
+      opacity,
+    }}
+  >
     <div
       style={{
         position: "absolute",
         inset: 0,
-        fontFamily: SANS,
-        pointerEvents: "none",
+        background: GLASS,
+        border: "1px solid rgba(255,255,255,0.6)",
+        borderRadius: 8,
+        boxShadow: "0 8px 32px rgba(80,120,180,0.25), 0 40px 90px rgba(80,120,180,0.22)",
+        overflow: "hidden",
       }}
     >
-      {/* 背景巨型描边字 */}
-      <div
-        style={{
-          position: "absolute",
-          top: -36,
-          left: 90 + Math.sin(f / 210) * 26,
-          fontFamily: SERIF,
-          fontSize: 296,
-          fontWeight: 700,
-          letterSpacing: -6,
-          color: "transparent",
-          WebkitTextStroke: "1.5px rgba(28,27,24,0.07)",
-          userSelect: "none",
-        }}
-      >
-        MyToDo
-      </div>
-      {/* 柔色光斑 */}
-      <div
-        style={{
-          position: "absolute",
-          left: -260 + Math.sin(f / 160) * 40,
-          bottom: -320,
-          width: 860,
-          height: 860,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(23,122,83,0.12), transparent 62%)",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          right: -300 + Math.cos(f / 190) * 36,
-          top: -300,
-          width: 780,
-          height: 780,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(circle, rgba(169,114,15,0.10), transparent 62%)",
-        }}
-      />
-      {/* 四角角标 */}
-      <div
-        style={{
-          position: "absolute",
-          left: 64,
-          top: 48,
-          fontSize: 15,
-          letterSpacing: 5,
-          color: DIM,
-        }}
-      >
-        MYTODO — PRODUCT FILM
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          right: 64,
-          top: 48,
-          fontSize: 15,
-          letterSpacing: 5,
-          color: DIM,
-        }}
-      >
-        2026 · WINDOWS
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          left: 64,
-          bottom: 44,
-          fontSize: 15,
-          letterSpacing: 3,
-          color: DIM,
-        }}
-      >
-        <span style={{ fontFamily: MONO, color: INK }}>0{ch + 1}</span>
-        {" / 06 — "}
-        {chapters[ch]}
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          right: 64,
-          bottom: 44,
-          fontSize: 15,
-          letterSpacing: 3,
-          color: DIM,
-          fontFamily: MONO,
-        }}
-      >
-        {String(sec).padStart(2, "0")} / 24 S
-      </div>
+      {/* 标题栏 */}
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 38, padding: "0 10px" }}>
+        <span style={{ fontWeight: 600, letterSpacing: 0.5, color: DIM, fontSize: 13, fontFamily: SANS }}>
+          10月4日 周日
+        </span>
+        <span style={{ display: "flex" }}>
+          {(["ball", "stats", "settings", "pin", "close"] as const).map((k) => (
+            <span
+              key={k}
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 6,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: k === "stats" && showStats ? ACCENT : DIM,
+                background:
+                  (k === "ball" && t >= T_BALL - 4 && t < T_BALL + 6) ||
+                  (k === "stats" && t >= T_STATS - 4 && t < T_STATS + 6)
+                    ? "rgba(255,255,255,0.55)"
+                    : "transparent",
+              }}
+            >
+              {TB_ICONS[k]}
+            </span>
+          ))}
+        </span>
+      </header>
+      <ListView t={t} fps={fps} visible={!showStats} />
+      <StatsView t={t} fps={fps} visible={showStats} />
     </div>
-  );
-};
+  </div>
+);
 
-/* 场景容器：聚焦式出入场（rack focus） */
-const Scene: React.FC<{
-  f: number;
-  a: number;
-  b: number;
-  c: number;
-  d: number;
-  children: React.ReactNode;
-}> = ({ f, a, b, c, d, children }) => {
-  if (f < a - 1 || f > d) return null;
-  const o = Math.min(
-    interpolate(f, [a, b], [0, 1], clamp),
-    interpolate(f, [c, d], [1, 0], clamp)
-  );
-  const bl = Math.max(
-    interpolate(f, [a, b], [15, 0], clamp),
-    interpolate(f, [c, d], [0, 15], clamp)
-  );
-  return (
-    <AbsoluteFill
-      style={{
-        opacity: o,
-        filter: bl > 0.05 ? `blur(${bl}px)` : undefined,
-      }}
-    >
-      {children}
-    </AbsoluteFill>
-  );
-};
-
-/* 场景内镜头（缩放/平移） */
-const Lens: React.FC<{
-  z: number;
-  x?: number;
-  y?: number;
-  children: React.ReactNode;
-}> = ({ z, x = 0, y = 0, children }) => (
-  <AbsoluteFill
-    style={{ transform: `scale(${z}) translate(${x}px, ${y}px)` }}
+/* ── 苹果式文案 ── */
+const Caption: React.FC<{
+  x: number;
+  y: number;
+  lines: string[];
+  sub?: string;
+  o: number;
+  size?: number;
+}> = ({ x, y, lines, sub, o, size = 58 }) => (
+  <div
+    style={{
+      position: "absolute",
+      left: x,
+      top: y,
+      fontFamily: SANS,
+      opacity: o,
+      transform: `translateY(${(1 - o) * 14}px)`,
+    }}
   >
-    {children}
-  </AbsoluteFill>
+    {lines.map((l, i) => (
+      <div key={i} style={{ fontSize: size, fontWeight: 600, color: A_INK, letterSpacing: -0.5, lineHeight: 1.24 }}>
+        {l}
+      </div>
+    ))}
+    {sub && (
+      <div style={{ fontSize: 23, color: A_DIM, marginTop: 18, letterSpacing: 0.2 }}>{sub}</div>
+    )}
+  </div>
 );
 
 /* ============================================================ */
@@ -957,483 +750,207 @@ export const Promo: React.FC = () => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
 
+  /* 小窗位置 / 缩放时间线 */
+  const settleX = interpolate(f, [40, 70], [683, 235], { ...clamp, easing: easeIO });
+  const homeX = f < 40 ? 683 : f < 560 ? settleX : interpolate(f, [560, 590], [235, 683], { ...clamp, easing: easeIO });
+
+  /* 收球变形（点 ◎ 后小窗飞向屏幕右缘） */
+  const morph = interpolate(f, [T_BALL, T_BALL + 24], [0, 1], { ...clamp, easing: easeIO });
+  const expand = interpolate(f, [T_EXPAND, T_EXPAND + 22], [0, 1], { ...clamp, easing: easeIO });
+  const m = Math.min(morph, 1 - expand);
+  const wScale = WS * (1 - m * 0.93);
+  const wOx = homeX + m * (1852 - homeX);
+  const wOy = OY + m * (462 - OY);
+  const wOpacity =
+    f < T_BALL
+      ? interpolate(f, [0, 16], [0, 1], clamp)
+      : f < T_EXPAND
+        ? interpolate(f, [T_BALL + 14, T_BALL + 24], [1, 0], clamp)
+        : interpolate(f, [T_EXPAND, T_EXPAND + 8], [0, 1], clamp);
+  /* 收尾：小窗淡出 + 回中 */
+  const endOut = interpolate(f, [T_END + 14, T_END + 42], [1, 0], clamp);
+  const endDrift = interpolate(f, [T_END, T_END + 40], [0, 26], { ...clamp, easing: easeIO });
+  const finalOpacity = wOpacity * endOut;
+
+  /* 球时间线：出生→贴右缘（55% 露出）→镜头推近时同步外滑保持贴边→悬停滑出全露 */
+  const ballFly = guardedSpring(f, T_BALL + 8, fps, 14, 90);
+  const dockPush = interpolate(f, [382, 402], [0, 1], { ...clamp, easing: easeIO });
+  const hoverOut = interpolate(f, [T_HOVER, T_HOVER + 16], [0, 1], { ...clamp, easing: easeIO });
+  const ballX = 1852 + ballFly * 63 + dockPush * 227 - hoverOut * 60;
+  const ballY = 497 + ballFly * 43;
+  const ballOpacity =
+    f < T_BALL + 6 ? 0 : f < T_EXPAND ? interpolate(f, [T_BALL + 6, T_BALL + 14], [0, 1], clamp) : interpolate(f, [T_EXPAND, T_EXPAND + 8], [1, 0], clamp);
+  const ballScale = 0.3 + ballFly * 0.7;
+
+  const showStats = f >= T_STATS;
+
+  /* 收球段 punch-in 镜头：镜头推向右缘的球，展开时拉回 */
+  const camZ =
+    f < 382
+      ? 1
+      : f < 402
+        ? interpolate(f, [382, 402], [1, 1.8], { ...clamp, easing: easeIO })
+        : f < 452
+          ? 1.8
+          : f < 480
+            ? interpolate(f, [452, 480], [1.8, 1], { ...clamp, easing: easeIO })
+            : 1;
+  const camX =
+    f < 382
+      ? 0
+      : f < 402
+        ? interpolate(f, [382, 402], [0, -1082], { ...clamp, easing: easeIO })
+        : f < 452
+          ? -1082
+          : f < 480
+            ? interpolate(f, [452, 480], [-1082, 0], { ...clamp, easing: easeIO })
+            : 0;
+  const camY =
+    f < 382
+      ? 0
+      : f < 402
+        ? interpolate(f, [382, 402], [0, -240], { ...clamp, easing: easeIO })
+        : f < 452
+          ? -240
+          : f < 480
+            ? interpolate(f, [452, 480], [-240, 0], { ...clamp, easing: easeIO })
+            : 0;
+
+  const capO = (a: number, b: number, c: number, d: number) =>
+    Math.min(interpolate(f, [a, b], [0, 1], clamp), interpolate(f, [c, d], [1, 0], clamp));
+
   return (
-    <AbsoluteFill
-      style={{
-        background: `linear-gradient(178deg, ${IVORY} 30%, ${IVORY2})`,
-        fontFamily: SANS,
-      }}
-    >
-      <Audio src={staticFile("music.wav")} />
-
-      {/* 大景深安全底：防止镜头平移时露边 */}
-      <div
+    <AbsoluteFill style={{ background: STAGE, fontFamily: SANS }}>
+      {/* 镜头：收球段 punch-in（origin 0 0，平移换算按左上原点） */}
+      <AbsoluteFill
         style={{
-          position: "absolute",
-          left: -700,
-          top: -700,
-          width: 3320,
-          height: 2480,
-          background: `linear-gradient(178deg, ${IVORY} 30%, ${IVORY2})`,
+          transform: `scale(${camZ}) translate(${camX}px, ${camY}px)`,
+          transformOrigin: "0 0",
         }}
-      />
-
-      <Chrome f={f} />
-
-      {/* ── S0 开场：编辑排版大字 ── */}
-      <Scene f={f} a={2} b={16} c={96} d={112}>
-        <AbsoluteFill
+      >
+        {/* 舞台柔光：给玻璃一层可模糊的环境 */}
+        <div
           style={{
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "column",
+            position: "absolute",
+            left: -140,
+            top: 60,
+            width: 1500,
+            height: 980,
+            borderRadius: "50%",
+            background: "radial-gradient(closest-side, rgba(61,139,212,0.13), transparent)",
+            filter: "blur(10px)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            right: -220,
+            top: -260,
+            width: 1100,
+            height: 900,
+            borderRadius: "50%",
+            background: "radial-gradient(closest-side, rgba(255,255,255,0.9), transparent)",
+          }}
+        />
+
+        {/* 小窗落影 */}
+        {finalOpacity > 0.01 && (
+          <div
+            style={{
+              position: "absolute",
+              left: wOx + 30,
+              top: wOy + 520 * (wScale / WS) + 44,
+              width: 300 * (wScale / WS) + 200,
+              height: 46,
+              borderRadius: "50%",
+              background: `radial-gradient(ellipse, rgba(40,70,110,${0.22 * finalOpacity}), transparent 68%)`,
+              filter: "blur(8px)",
+            }}
+          />
+        )}
+
+        {/* 小窗本体 */}
+        {finalOpacity > 0.005 && (
+          <Widget
+            t={f}
+            fps={fps}
+            ox={wOx}
+            scale={wScale}
+            opacity={finalOpacity}
+            showStats={showStats}
+          />
+        )}
+
+        {/* 悬浮球 */}
+        {ballOpacity > 0.005 && (
+          <div style={{ transform: `scale(${ballScale})`, transformOrigin: `${ballX}px ${ballY}px` }}>
+            <BallDisc x={ballX} y={ballY} size={104} pct={40} count="3" opacity={ballOpacity} />
+          </div>
+        )}
+
+        {/* 文案 */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 96,
+            textAlign: "center",
+            opacity: capO(8, 22, 40, 54),
           }}
         >
-          <div
-            style={{
-              fontSize: 21,
-              letterSpacing: 10,
-              color: DIM,
-              marginBottom: 36,
-              opacity: interpolate(f, [4, 16], [0, 1], clamp),
-            }}
-          >
-            WINDOWS 桌面 · 待办事项
-          </div>
-          <div
-            style={{
-              fontFamily: SERIF,
-              fontSize: 96,
-              color: INK,
-              letterSpacing: 2,
-              opacity: interpolate(f, [10, 28], [0, 1], clamp),
-              transform: `translateY(${
-                (1 - interpolate(f, [10, 28], [0, 1], { ...clamp, easing: easeOut })) * 44
-              }px)`,
-            }}
-          >
-            再好的 to-do 软件，
-          </div>
-          <div
-            style={{
-              fontFamily: SERIF,
-              fontSize: 96,
-              letterSpacing: 2,
-              marginTop: 10,
-              color: INK,
-              opacity: interpolate(f, [24, 42], [0, 1], clamp),
-              transform: `translateY(${
-                (1 - interpolate(f, [24, 42], [0, 1], { ...clamp, easing: easeOut })) * 44
-              }px)`,
-            }}
-          >
-            不如一个{" "}
-            <span style={{ color: GREEN, fontStyle: "italic" }}>用得下去的</span>
-            <span
+          <div style={{ fontSize: 34, fontWeight: 600, color: A_INK, letterSpacing: 1 }}>MyToDo</div>
+          <div style={{ fontSize: 17, color: A_DIM, letterSpacing: 6, marginTop: 8 }}>WINDOWS 桌面待办</div>
+        </div>
+
+        <Caption x={1010} y={360} lines={["想到，就记下。"]} sub="不限时 · 每日 · 限时，回车即加" o={capO(74, 92, 214, 232)} />
+        <Caption x={1010} y={360} lines={["完成，点一下就好。"]} sub="已完成的自动沉底，不打扰" o={capO(228, 246, 306, 324)} />
+        <Caption
+          x={1265}
+          y={484}
+          lines={["收进一颗球，", "贴边，不挡屏幕。"]}
+          o={capO(392, 412, 440, 456)}
+          size={62}
+        />
+        <Caption x={1010} y={360} lines={["坚持，看得见。"]} sub="完成率 · 连续打卡 · 按期率" o={capO(502, 520, 566, 584)} />
+
+        {/* 光标 */}
+        <Cursor f={f} />
+      </AbsoluteFill>
+
+      {/* 尾板（待小窗淡出后再入场，避免重叠） */}
+      {(() => {
+        const o1 = interpolate(f, [606, 624], [0, 1], { ...clamp, easing: easeOut });
+        const o2 = interpolate(f, [622, 638], [0, 1], { ...clamp, easing: easeOut });
+        const o3 = interpolate(f, [632, 648], [0, 1], { ...clamp, easing: easeOut });
+        const pop = Math.max(guardedSpring(f, 606, fps, 14, 90), 0.001);
+        if (f < 604) return null;
+        return (
+          <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
+            <div
               style={{
-                display: "inline-block",
-                width: 26,
-                height: 26,
-                marginLeft: 14,
-                borderRadius: "50%",
-                background: GREEN,
-                transform: `scale(${spring({
-                  frame: f - 38,
-                  fps,
-                  config: { damping: 11, stiffness: 170 },
-                })})`,
-                boxShadow: "0 8px 22px rgba(14,92,63,0.35)",
-              }}
-            />
-          </div>
-          {/* 三个特性小字 */}
-          <div
-            style={{
-              display: "flex",
-              gap: 44,
-              marginTop: 54,
-              fontSize: 19,
-              color: DIM,
-              letterSpacing: 4,
-            }}
-          >
-            {["磨砂玻璃", "到期提醒", "坚持可见"].map((s, i) => (
-              <div
-                key={i}
-                style={{
-                  opacity: interpolate(f, [46 + i * 7, 58 + i * 7], [0, 1], clamp),
-                  transform: `translateY(${
-                    (1 - interpolate(f, [46 + i * 7, 58 + i * 7], [0, 1], { ...clamp, easing: easeOut })) * 20
-                  }px)`,
-                }}
-              >
-                {s}
-              </div>
-            ))}
-          </div>
-        </AbsoluteFill>
-      </Scene>
-
-      {/* ── S1 屏幕登场 · 今日清单 ── */}
-      <Scene f={f} a={100} b={116} c={248} d={264}>
-        {(() => {
-          const t = f - 100;
-          const rise = spring({
-            frame: t,
-            fps,
-            config: { damping: 15, stiffness: 82 },
-          });
-          const z = interpolate(t, [0, 150], [1, 1.045], clamp);
-          return (
-            <Lens z={z}>
-              <Screen
-                x={150}
-                y={(1 - rise) * 980}
-                s={Math.max(0.965 + rise * 0.035, 0.001)}
-                swing={(1 - rise) * -10}
-              >
-                <TodayList t={t} />
-              </Screen>
-              {/* 左侧字幕 */}
-              {(() => {
-                const cap = interpolate(t, [26, 42], [0, 1], {
-                  ...clamp,
-                  easing: easeOut,
-                });
-                return (
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 118,
-                      top: 400,
-                      opacity: cap,
-                      transform: `translateY(${(1 - cap) * 22}px)`,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: SERIF,
-                        fontSize: 104,
-                        color: "transparent",
-                        WebkitTextStroke: `1.6px ${GREEN}`,
-                        lineHeight: 1,
-                      }}
-                    >
-                      01
-                    </div>
-                    <div
-                      style={{
-                        width: 54,
-                        height: 3,
-                        background: GREEN,
-                        margin: "22px 0",
-                      }}
-                    />
-                    <div style={{ fontSize: 34, fontWeight: 700, color: INK }}>
-                      打开就是今天
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 19,
-                        color: DIM,
-                        marginTop: 10,
-                        letterSpacing: 1,
-                      }}
-                    >
-                      记下就别惦记 · 完成自动沉底
-                    </div>
-                  </div>
-                );
-              })()}
-            </Lens>
-          );
-        })()}
-      </Scene>
-
-      {/* ── S2 三种生命周期 ── */}
-      <Scene f={f} a={256} b={272} c={404} d={420}>
-        {(() => {
-          const t = f - 256;
-          const dx = interpolate(t, [0, 150], [44, -44], clamp);
-          return (
-            <Lens z={1.02} x={dx}>
-              <Screen x={150}>
-                <Lifecycle t={t} />
-              </Screen>
-              {(() => {
-                const cap = interpolate(t, [22, 38], [0, 1], {
-                  ...clamp,
-                  easing: easeOut,
-                });
-                return (
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 118,
-                      top: 400,
-                      opacity: cap,
-                      transform: `translateY(${(1 - cap) * 22}px)`,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: SERIF,
-                        fontSize: 104,
-                        color: "transparent",
-                        WebkitTextStroke: `1.6px ${GREEN}`,
-                        lineHeight: 1,
-                      }}
-                    >
-                      02
-                    </div>
-                    <div
-                      style={{
-                        width: 54,
-                        height: 3,
-                        background: GREEN,
-                        margin: "22px 0",
-                      }}
-                    />
-                    <div style={{ fontSize: 34, fontWeight: 700, color: INK }}>
-                      三种生命周期
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 19,
-                        color: DIM,
-                        marginTop: 10,
-                        letterSpacing: 1,
-                      }}
-                    >
-                      每日重来 · 限时归档 · 互相转化
-                    </div>
-                  </div>
-                );
-              })()}
-            </Lens>
-          );
-        })()}
-      </Scene>
-
-      {/* ── S3 悬浮球：从屏幕里飞出来 ── */}
-      <Scene f={f} a={410} b={426} c={558} d={574}>
-        {(() => {
-          const t = f - 410;
-          const z = interpolate(t, [0, 50], [1, 1.06], clamp);
-          const pz = interpolate(t, [50, 74], [1.06, 1.22], {
-            ...clamp,
-            easing: easeInOut,
-          });
-          const px = interpolate(t, [50, 74], [0, -813], {
-            ...clamp,
-            easing: easeInOut,
-          });
-          const py = interpolate(t, [50, 74], [0, -15], {
-            ...clamp,
-            easing: easeInOut,
-          });
-          const cap = interpolate(t, [10, 24], [0, 1], {
-            ...clamp,
-            easing: easeOut,
-          });
-          const capOut = interpolate(t, [46, 58], [1, 0], clamp);
-          const capO = Math.min(cap, capOut);
-          return (
-            <Lens z={z * pz} x={px} y={py}>
-              {/* 清单在屏幕内收缩，暗示收球 */}
-              <Screen x={-140}>
-                <TodayList
-                  t={30}
-                  collapse={interpolate(t, [0, 42], [0, 1], clamp)}
-                />
-              </Screen>
-              <DeskBall t={t} />
-              <div
-                style={{
-                  position: "absolute",
-                  left: 118,
-                  top: 400,
-                  opacity: capO,
-                }}
-              >
-                <div
-                  style={{
-                    fontFamily: SERIF,
-                    fontSize: 104,
-                    color: "transparent",
-                    WebkitTextStroke: `1.6px ${GREEN}`,
-                    lineHeight: 1,
-                  }}
-                >
-                  03
-                </div>
-                <div
-                  style={{
-                    width: 54,
-                    height: 3,
-                    background: GREEN,
-                    margin: "22px 0",
-                  }}
-                />
-                <div style={{ fontSize: 34, fontWeight: 700, color: INK }}>
-                  悬浮球
-                </div>
-              </div>
-            </Lens>
-          );
-        })()}
-      </Scene>
-
-      {/* ── S4 统计 ── */}
-      <Scene f={f} a={564} b={580} c={650} d={666}>
-        {(() => {
-          const t = f - 564;
-          const z = interpolate(t, [0, 100], [1.1, 1.0], clamp);
-          return (
-            <Lens z={z}>
-              <Screen x={150}>
-                <StatsDash t={t} />
-              </Screen>
-              {(() => {
-                const cap = interpolate(t, [20, 36], [0, 1], {
-                  ...clamp,
-                  easing: easeOut,
-                });
-                return (
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: 118,
-                      top: 400,
-                      opacity: cap,
-                      transform: `translateY(${(1 - cap) * 22}px)`,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: SERIF,
-                        fontSize: 104,
-                        color: "transparent",
-                        WebkitTextStroke: `1.6px ${GREEN}`,
-                        lineHeight: 1,
-                      }}
-                    >
-                      04
-                    </div>
-                    <div
-                      style={{
-                        width: 54,
-                        height: 3,
-                        background: GREEN,
-                        margin: "22px 0",
-                      }}
-                    />
-                    <div style={{ fontSize: 34, fontWeight: 700, color: INK }}>
-                      坚持，看得见
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 19,
-                        color: DIM,
-                        marginTop: 10,
-                        letterSpacing: 1,
-                      }}
-                    >
-                      完成率 · 连续打卡 · 热力图
-                    </div>
-                  </div>
-                );
-              })()}
-            </Lens>
-          );
-        })()}
-      </Scene>
-
-      {/* ── S5 尾板 ── */}
-      <Scene f={f} a={656} b={672} c={718} d={730}>
-        {(() => {
-          const t = f - 656;
-          const logoPop = spring({
-            frame: t - 4,
-            fps,
-            config: { damping: 12, stiffness: 110 },
-          });
-          const l1 = interpolate(t, [12, 26], [0, 1], { ...clamp, easing: easeOut });
-          const l2 = interpolate(t, [20, 34], [0, 1], { ...clamp, easing: easeOut });
-          const l3 = interpolate(t, [28, 44], [0, 1], { ...clamp, easing: easeOut });
-          return (
-            <AbsoluteFill
-              style={{
-                alignItems: "center",
-                justifyContent: "center",
-                flexDirection: "column",
+                fontSize: 96,
+                fontWeight: 600,
+                color: A_INK,
+                letterSpacing: -1,
+                opacity: o1,
+                transform: `scale(${pop})`,
               }}
             >
-              <div
-                style={{
-                  transform: `scale(${Math.max(logoPop, 0.001)})`,
-                  marginBottom: 34,
-                }}
-              >
-                <Ball d={104} />
-              </div>
-              <div
-                style={{
-                  fontFamily: SERIF,
-                  fontSize: 88,
-                  color: INK,
-                  letterSpacing: 1,
-                  opacity: l1,
-                  transform: `translateY(${(1 - l1) * 26}px)`,
-                }}
-              >
-                MyToDo
-              </div>
-              <div
-                style={{
-                  fontFamily: SERIF,
-                  fontStyle: "italic",
-                  fontSize: 27,
-                  color: DIM,
-                  marginTop: 16,
-                  opacity: l2,
-                  transform: `translateY(${(1 - l2) * 20}px)`,
-                }}
-              >
-                再好的 to-do 软件，不如一个用得下去的。
-              </div>
-              <div
-                style={{
-                  marginTop: 44,
-                  fontFamily: MONO,
-                  fontSize: 21,
-                  letterSpacing: 2,
-                  color: GREEN_D,
-                  border: `1.5px solid ${GREEN}`,
-                  borderRadius: 999,
-                  padding: "13px 34px",
-                  opacity: l3,
-                  transform: `translateY(${(1 - l3) * 20}px)`,
-                  background: "rgba(255,255,255,0.55)",
-                }}
-              >
-                github.com/jovanzhang6/MyToDo
-              </div>
-              <div
-                style={{
-                  marginTop: 22,
-                  fontSize: 15,
-                  letterSpacing: 4,
-                  color: DIM,
-                  opacity: l3,
-                }}
-              >
-                MIT · WINDOWS / MACOS(计划)
-              </div>
-            </AbsoluteFill>
-          );
-        })()}
-      </Scene>
+              MyToDo<span style={{ color: ACCENT }}>.</span>
+            </div>
+            <div style={{ fontSize: 26, color: A_DIM, marginTop: 20, opacity: o2 }}>
+              再好的 to-do，不如一个用得下去的。
+            </div>
+            <div style={{ fontSize: 20, color: A_DIM, marginTop: 52, opacity: o3, letterSpacing: 1 }}>
+              github.com/jovanzhang6/MyToDo
+            </div>
+            <div style={{ fontSize: 15, color: A_DIM, opacity: o3, letterSpacing: 4, marginTop: 14 }}>
+              MIT · WINDOWS
+            </div>
+          </AbsoluteFill>
+        );
+      })()}
     </AbsoluteFill>
   );
 };

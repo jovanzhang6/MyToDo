@@ -287,19 +287,22 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
             mon.size().width,
             mon.size().height,
         );
+        // 先钳尺寸再量实际大小：贴边数学一律用实测物理尺寸（BALL_SIZE 是逻辑值，
+        // 150% 缩放下实窗 84 物理像素——单位混用曾致首次收球藏/露比例颠倒）
+        let _ = ball.set_size(tauri::LogicalSize::new(56.0, 56.0));
+        let real = ball.outer_size().unwrap_or_default();
+        let (rw, rh) = (real.width.max(1), real.height.max(1));
         let (edge_x, edge_y) = (
-            if pos.x + BALL_SIZE as i32 as i32 / 2 < m.0 + m.2 as i32 / 2 {
+            if pos.x + rw as i32 / 2 < m.0 + m.2 as i32 / 2 {
                 m.0
             } else {
-                m.0 + m.2 as i32 - BALL_SIZE as i32
+                m.0 + m.2 as i32 - rw as i32
             },
-            pos.y.clamp(m.1, m.1 + m.3 as i32 - BALL_SIZE as i32),
+            pos.y.clamp(m.1, m.1 + m.3 as i32 - rh as i32),
         );
-        let (dock_x, dock_y) = dock_target(m, (edge_x, edge_y, BALL_SIZE, BALL_SIZE));
+        let (dock_x, dock_y) = dock_target(m, (edge_x, edge_y, rw, rh));
         let _ = ball.set_position(PhysicalPosition::new(pos.x, pos.y));
         let _ = ball.show();
-        // 显示时强制重设尺寸并记录：创建时的 64×64 逻辑宽被某处撑到 135（实测），此处钳回
-        let _ = ball.set_size(tauri::LogicalSize::new(56.0, 56.0));
         let _ = main.hide();
         BALL_DRAGGING.store(true, std::sync::atomic::Ordering::SeqCst);
         {
@@ -414,7 +417,7 @@ const DEFAULT_W: u32 = 300;
 const DEFAULT_H: u32 = 520;
 
 /// 贴边时藏出屏外的球身比例（露 60%，数字仍可读；悬停滑回全露）
-pub const DOCK_HIDDEN_RATIO: f64 = 0.4;
+pub const DOCK_HIDDEN_RATIO: f64 = 0.45;
 
 /// 贴边目标位置（纯函数，单测对象）：水平就近选边，垂直原位钳屏内；
 /// 露 60%、藏 DOCK_HIDDEN_RATIO 出屏。monitor/ball 均为物理像素全局坐标。
@@ -544,15 +547,15 @@ mod tests {
     fn dock_picks_nearest_horizontal_edge() {
         // 球在屏幕左半 → 贴左；右半 → 贴右
         let (x, _) = dock_target(MON, (100, 500, 56, 56));
-        assert_eq!(x, -22, "左贴：藏 40% 出左屏（56*0.4≈22）");
+        assert_eq!(x, -25, "左贴：藏 45% 出左屏（56*0.45≈25）");
         let (x, _) = dock_target(MON, (1700, 500, 56, 56));
-        assert_eq!(x, 1920 - 56 + 22, "右贴：藏 40% 出右屏");
+        assert_eq!(x, 1920 - 56 + 25, "右贴：藏 45% 出右屏");
     }
 
     #[test]
     fn dock_keeps_y_clamped_in_monitor() {
         let (x, y) = dock_target(MON, (100, -30, 56, 56));
-        assert_eq!((x, y), (-22, 0), "越出屏顶 → 钳回 0");
+        assert_eq!((x, y), (-25, 0), "越出屏顶 → 钳回 0");
         let (_, y) = dock_target(MON, (100, 2000, 56, 56));
         assert_eq!(y, 1080 - 56, "越出屏底 → 钳回屏内");
     }
@@ -569,6 +572,6 @@ mod tests {
         // 副屏在主屏右侧：x 从 1920 起
         let sec: (i32, i32, u32, u32) = (1920, 0, 1920, 1080);
         let (x, _) = dock_target(sec, (2600, 500, 56, 56));
-        assert_eq!(x, 1920 - 22, "副屏左贴以副屏原点为基准");
+        assert_eq!(x, 1920 - 25, "副屏左贴以副屏原点为基准");
     }
 }

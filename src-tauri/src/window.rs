@@ -68,6 +68,74 @@ pub fn set_border_none(hwnd_raw: *mut core::ffi::c_void) {
     }
 }
 
+static DOCK_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// 收球后调度闲时贴边（后端权威：不依赖任何前端计时器）。展开时取消。
+pub fn schedule_dock(app: &AppHandle, delay_ms: u64) {
+    use std::sync::atomic::Ordering;
+    let gen = DOCK_GEN.fetch_add(1, Ordering::SeqCst) + 1;
+    let a = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        if DOCK_GEN.load(Ordering::SeqCst) != gen {
+            return; // 已被展开取消/被更新的调度取代
+        }
+        dock_now(&a);
+    });
+}
+
+pub fn cancel_dock() {
+    use std::sync::atomic::Ordering;
+    DOCK_GEN.fetch_add(1, Ordering::SeqCst);
+}
+
+/// 立即贴边（球窗隐藏时跳过——不贴看不见的球）。
+pub fn dock_now(app: &AppHandle) {
+    use tauri::Manager;
+    let Some(ball) = app.get_webview_window("ball") else {
+        return;
+    };
+    if !ball.is_visible().unwrap_or(false) {
+        return;
+    }
+    let (Ok(pos), Ok(size)) = (ball.outer_position(), ball.outer_size()) else {
+        return;
+    };
+    let Some(Some(mon)) = ball.current_monitor().ok() else {
+        return;
+    };
+    let m = (
+        mon.position().x,
+        mon.position().y,
+        mon.size().width,
+        mon.size().height,
+    );
+    let (x, y) = dock_target(m, (pos.x, pos.y, size.width, size.height));
+    glide_ball(app, x, y);
+}
+
+/// 立即滑回全可见（悬停）。
+pub fn undock_now(app: &AppHandle) {
+    use tauri::Manager;
+    let Some(ball) = app.get_webview_window("ball") else {
+        return;
+    };
+    let (Ok(pos), Ok(size)) = (ball.outer_position(), ball.outer_size()) else {
+        return;
+    };
+    let Some(Some(mon)) = ball.current_monitor().ok() else {
+        return;
+    };
+    let m = (
+        mon.position().x,
+        mon.position().y,
+        mon.size().width,
+        mon.size().height,
+    );
+    let (x, y) = undock_target(m, (pos.x, pos.y, size.width, size.height));
+    glide_ball(app, x, y);
+}
+
 /// 悬浮球切换（独立球窗口架构）：收球=主窗隐藏+球窗显示（就地出现）；
 /// 展开=球窗当前位置显示主窗（尺寸取 pre_ball，出屏钳位）。两窗口尺寸终生不变，
 /// 规避同窗口变形与 DWM/阴影/最小尺寸/WebView 重排的全部竞态。
@@ -103,6 +171,8 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
         // 显示时强制重设尺寸并记录：创建时的 64×64 逻辑宽被某处撑到 135（实测），此处钳回
         let _ = ball.set_size(tauri::LogicalSize::new(56.0, 56.0));
         let _ = main.hide();
+        // 闲时贴边调度（后端权威）：收球 0.5 秒后自动贴边
+        schedule_dock(app, 500);
         let bsize = ball.outer_size().map(|s| (s.width, s.height));
         let bscale = ball.scale_factor().unwrap_or(1.0);
         eprintln!(
@@ -110,6 +180,8 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
             pos.x, pos.y
         );
     } else {
+        // 展开即取消待执行的贴边调度
+        cancel_dock();
         // 主窗在球的当前位置展开；出屏钳位（球贴边时展开不越过屏幕）
         let ball_pos = ball.outer_position().unwrap_or_default();
         let scale = ball.scale_factor().unwrap_or(1.0);

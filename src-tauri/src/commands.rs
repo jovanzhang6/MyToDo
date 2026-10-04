@@ -238,50 +238,14 @@ pub fn set_ball_mode(app: AppHandle, on: bool) -> Result<(), String> {
 /// 闲时贴边：滑向水平最近边，露 60% 藏 40%。
 #[tauri::command]
 pub fn dock_ball(app: AppHandle) -> Result<(), String> {
-    use tauri::Manager;
-    let Some(ball) = app.get_webview_window("ball") else {
-        return Ok(());
-    };
-    let pos = ball.outer_position().map_err(|e| e.to_string())?;
-    let size = ball.outer_size().map_err(|e| e.to_string())?;
-    let Some(mon) = ball.current_monitor().map_err(|e| e.to_string())? else {
-        return Ok(());
-    };
-    let (x, y) = crate::window::dock_target(
-        (
-            mon.position().x,
-            mon.position().y,
-            mon.size().width,
-            mon.size().height,
-        ),
-        (pos.x, pos.y, size.width, size.height),
-    );
-    crate::window::glide_ball(&app, x, y);
+    crate::window::dock_now(&app);
     Ok(())
 }
 
 /// 悬停滑出：回到同边全可见。
 #[tauri::command]
 pub fn undock_ball(app: AppHandle) -> Result<(), String> {
-    use tauri::Manager;
-    let Some(ball) = app.get_webview_window("ball") else {
-        return Ok(());
-    };
-    let pos = ball.outer_position().map_err(|e| e.to_string())?;
-    let size = ball.outer_size().map_err(|e| e.to_string())?;
-    let Some(mon) = ball.current_monitor().map_err(|e| e.to_string())? else {
-        return Ok(());
-    };
-    let (x, y) = crate::window::undock_target(
-        (
-            mon.position().x,
-            mon.position().y,
-            mon.size().width,
-            mon.size().height,
-        ),
-        (pos.x, pos.y, size.width, size.height),
-    );
-    crate::window::glide_ball(&app, x, y);
+    crate::window::undock_now(&app);
     Ok(())
 }
 

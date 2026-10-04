@@ -368,24 +368,17 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
                 }
             }
         };
-        // pre_ball 是客户区物理尺寸；按实测边框差值换算 set_size 的外框请求，
-        // 使恢复后的客户区恰好等于 pre_ball（彻底消除每轮 +22×13 的复利膨胀）
-        let (Ok(c_now), Ok(o_now)) = (main.inner_size(), main.outer_size()) else {
-            return;
-        };
-        let d_w = o_now.width - c_now.width;
-        let d_h = o_now.height - c_now.height;
-        let _ = main.set_size(tauri::PhysicalSize::new(
-            target.0 + d_w,
-            target.1 + d_h,
-        ));
+        // 实测（探针）：这套无边框窗口的 set_size 语义即“设客户区”——
+        // 请求 (1014,891) 落地 inner=(1014,891)。因此直接设目标值，禁止任何边框补偿
+        //（补偿即膨胀：v0.1.1 每轮 +22×13 的根因）。
+        let _ = main.set_size(tauri::PhysicalSize::new(target.0, target.1));
         std::thread::sleep(std::time::Duration::from_millis(120));
         let after = (
             main.inner_size().map(|s| (s.width, s.height)),
             main.outer_size().map(|s| (s.width, s.height)),
         );
         eprintln!(
-            "[球] 展开尺寸 目标客户区=({},{}) 边框差=({d_w},{d_h}) 落地后 内/外={after:?}",
+            "[球] 展开尺寸 目标客户区=({},{}) 落地后 内/外={after:?}",
             target.0, target.1
         );
         // 出屏钳位：主窗右/下边缘不越出球所在显示器

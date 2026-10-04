@@ -156,9 +156,82 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
 
 pub const MIN_VALID_W: u32 = 150;
 
-pub const BALL_SIZE: u32 = 64;
+pub const BALL_SIZE: u32 = 56;
 const DEFAULT_W: u32 = 300;
 const DEFAULT_H: u32 = 520;
+
+/// 贴边时藏出屏外的球身比例（露 60%，数字仍可读；悬停滑回全露）
+pub const DOCK_HIDDEN_RATIO: f64 = 0.4;
+
+/// 贴边目标位置（纯函数，单测对象）：水平就近选边，垂直原位钳屏内；
+/// 露 60%、藏 DOCK_HIDDEN_RATIO 出屏。monitor/ball 均为物理像素全局坐标。
+pub fn dock_target(
+    monitor: (i32, i32, u32, u32),
+    ball: (i32, i32, u32, u32),
+) -> (i32, i32) {
+    let (mx, my, mw, mh) = monitor;
+    let (bx, by, bw, bh) = ball;
+    let dock_left = bx + bw as i32 / 2 < mx + mw as i32 / 2;
+    let hidden = (bw as f64 * DOCK_HIDDEN_RATIO).round() as i32;
+    let x = if dock_left {
+        mx - hidden
+    } else {
+        mx + mw as i32 - bw as i32 + hidden
+    };
+    let y = by.clamp(my, my + mh as i32 - bh as i32);
+    (x, y)
+}
+
+/// 悬停滑出的全可见位置（同边）
+pub fn undock_target(
+    monitor: (i32, i32, u32, u32),
+    ball: (i32, i32, u32, u32),
+) -> (i32, i32) {
+    let (mx, my, mw, mh) = monitor;
+    let (bx, by, bw, bh) = ball;
+    let dock_left = bx + bw as i32 / 2 < mx + mw as i32 / 2;
+    let x = if dock_left {
+        mx
+    } else {
+        mx + mw as i32 - bw as i32
+    };
+    let y = by.clamp(my, my + mh as i32 - bh as i32);
+    (x, y)
+}
+
+static GLIDE_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// 球窗平滑滑向目标（ease-out ~290ms）。并发调用以最新目标为准（代际计数使旧动画失效）。
+pub fn glide_ball(app: &AppHandle, tx: i32, ty: i32) {
+    use std::sync::atomic::Ordering;
+    let Some(ball) = app.get_webview_window("ball") else {
+        return;
+    };
+    let Ok(from) = ball.outer_position() else {
+        return;
+    };
+    let gen = GLIDE_GEN.fetch_add(1, Ordering::SeqCst) + 1;
+    let dx = tx - from.x;
+    let dy = ty - from.y;
+    if dx == 0 && dy == 0 {
+        return;
+    }
+    std::thread::spawn(move || {
+        const STEPS: u32 = 12;
+        for i in 1..=STEPS {
+            if GLIDE_GEN.load(Ordering::SeqCst) != gen {
+                return; // 有更新的目标接管
+            }
+            std::thread::sleep(std::time::Duration::from_millis(24));
+            let t = i as f64 / STEPS as f64;
+            let ease = 1.0 - (1.0 - t) * (1.0 - t);
+            let _ = ball.set_position(PhysicalPosition::new(
+                from.x + (dx as f64 * ease).round() as i32,
+                from.y + (dy as f64 * ease).round() as i32,
+            ));
+        }
+    });
+}
 
 /// 淡蓝磨砂：Acrylic 真材质，透明度直接由 tint alpha 承载（滑杆实时可调、可看穿）。
 /// 注意：Windows 的 Acrylic 在窗口失焦时材质会略微变实，这是系统级行为。
@@ -222,5 +295,53 @@ fn persist_geometry(handle: &AppHandle, pos: (i32, i32), size: (u32, u32)) {
     drop(db);
     if let Err(e) = result {
         eprintln!("窗口几何落盘失败：{e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{dock_target, undock_target};
+
+    const MON: (i32, i32, u32, u32) = (0, 0, 1920, 1080);
+    const BALL: (i32, i32, u32, u32) = (900, 500, 56, 56);
+
+    #[test]
+    fn dock_picks_nearest_horizontal_edge() {
+        // 球在屏幕左半 → 贴左；右半 → 贴右
+        let (x, _) = dock_target(MON, (100, 500, 56, 56));
+        assert_eq!(x, -22, "左贴：藏 40% 出左屏（56*0.4≈22）");
+        let (x, _) = dock_target(MON, (1700, 500, 56, 56));
+        assert_eq!(x, 1920 - 56 + 22, "右贴：藏 40% 出右屏");
+    }
+
+    #[test]
+    fn dock_keeps_y_clamped_in_monitor() {
+        let (x, y) = dock_target(MON, (100, -30, 56, 56));
+        assert_eq!((x, y), (-22, 0), "越出屏顶 → 钳回 0");
+        let (_, y) = dock_target(MON, (100, 2000, 56, 56));
+        assert_eq!(y, 1080 - 56, "越出屏底 → 钳回屏内");
+    }
+
+    #[test]
+    fn dock_is_idempotent_at_edge() {
+        let docked = dock_target(MON, BALL);
+        let again = dock_target(MON, (docked.0, docked.1, BALL.2, BALL.3));
+        assert_eq!(docked, again, "重复贴边不漂移");
+    }
+
+    #[test]
+    fn undock_returns_fully_visible_same_side() {
+        let (ux, uy) = undock_target(MON, (100, 500, 56, 56));
+        assert_eq!((ux, uy), (0, 500), "左半屏悬停 → 全露贴左");
+        let (ux, _) = undock_target(MON, (1700, 500, 56, 56));
+        assert_eq!(ux, 1920 - 56, "右半屏悬停 → 全露贴右");
+    }
+
+    #[test]
+    fn dock_works_on_secondary_monitor() {
+        // 副屏在主屏右侧：x 从 1920 起
+        let sec: (i32, i32, u32, u32) = (1920, 0, 1920, 1080);
+        let (x, _) = dock_target(sec, (2600, 500, 56, 56));
+        assert_eq!(x, 1920 - 22, "副屏左贴以副屏原点为基准");
     }
 }

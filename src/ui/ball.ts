@@ -18,8 +18,31 @@ export function initBall(): void {
     let sx = 0;
     let sy = 0;
     let dragging = false;
+    let dockTimer: number | undefined;
+    let docked = false;
+
+    /** 闲时贴边：静置 2 秒滑向最近边（悬停/拖动/展开都会重置计时） */
+    const armDock = () => {
+      clearTimeout(dockTimer);
+      dockTimer = window.setTimeout(async () => {
+        await invoke("dock_ball").catch(() => {});
+        docked = true;
+      }, 2000);
+    };
+    const disarmDock = () => clearTimeout(dockTimer);
+
+    // 悬停贴边球 → 滑回全可见；移开 → 重新计时贴边
+    ball.addEventListener("mouseenter", () => {
+      if (!docked) return;
+      docked = false;
+      invoke("undock_ball").catch(() => {});
+    });
+    ball.addEventListener("mouseleave", () => armDock());
+
     ball.addEventListener("mousedown", (e) => {
       if (e.button !== 0) return;
+      disarmDock();
+      docked = false;
       sx = e.clientX;
       sy = e.clientY;
       dragging = false;
@@ -35,11 +58,7 @@ export function initBall(): void {
         cleanup();
         if (!dragging) {
           invoke("set_ball_mode", { on: false })
-            .then(() => invoke("log_frontend", { msg: "[球窗] 展开invoke成功" }).catch(() => {}))
-            .catch((err) => {
-              invoke("log_frontend", { msg: `[球窗] 展开invoke失败: ${err}` }).catch(() => {});
-              showTip(String(err));
-            });
+            .catch((err) => showTip(String(err)));
         }
       };
       const cleanup = () => {
@@ -49,6 +68,8 @@ export function initBall(): void {
       document.addEventListener("mousemove", onMove);
       document.addEventListener("mouseup", onUp);
     });
+
+    armDock();
     return;
   }
 
@@ -59,17 +80,10 @@ export function initBall(): void {
   });
 }
 
-let lastViewport = "";
 
 /** refresh 回流：球窗渲染球面；主窗无需处理（收球时主窗整体隐藏） */
 export function renderBall(state: StateDto): void {
   if (!IS_BALL_WINDOW) return;
-  // 视口尺寸诊断：只在变化时上报
-  const vp = `${window.innerWidth}x${window.innerHeight} dpr=${window.devicePixelRatio}`;
-  if (vp !== lastViewport) {
-    lastViewport = vp;
-    invoke("log_frontend", { msg: `[球窗] 视口 ${vp}` }).catch(() => {});
-  }
   const { today_done, today_total } = state.stats;
   const undone = today_total - today_done;
   const pct = today_total === 0 ? 0 : Math.round((today_done / today_total) * 100);

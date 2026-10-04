@@ -54,6 +54,7 @@ pub fn run() {
             window::apply_startup_geometry(&handle, &window);
             window::apply_blur(&window, saved_opacity);
             window::watch_geometry(&handle, &window);
+            window::start_ball_watcher(&handle);
             tray::setup(&handle)?;
             // 几何/材质就绪后再显示，避免「左上角白窗闪现再跳右上角」
             window.show().expect("无法显示主窗口");

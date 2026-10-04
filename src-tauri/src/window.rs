@@ -160,7 +160,8 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
                 ball_mode: false,
             });
         }
-        // 收球直接落到贴点位（不变式：可见即贴边，不给漂移留窗口）
+        // 两段式收球动画：主窗位置全露出现 → 滑到边（全露）→ 缩进（露 60% 藏 40%）
+        // 动画期间置拖拽态抑制守护线程，结束时由守护线程的静止判定自然解除
         let Some(Some(mon)) = main.current_monitor().ok() else {
             return;
         };
@@ -170,17 +171,53 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
             mon.size().width,
             mon.size().height,
         );
-        let (bx, by) = dock_target(m, (pos.x, pos.y, BALL_SIZE, BALL_SIZE));
-        let _ = ball.set_position(PhysicalPosition::new(bx, by));
+        let (edge_x, edge_y) = (
+            if pos.x + size.width as i32 / 2 < m.0 + m.2 as i32 / 2 {
+                m.0
+            } else {
+                m.0 + m.2 as i32 - BALL_SIZE as i32
+            },
+            pos.y.clamp(m.1, m.1 + m.3 as i32 - BALL_SIZE as i32),
+        );
+        let (dock_x, dock_y) = dock_target(m, (pos.x, pos.y, BALL_SIZE, BALL_SIZE));
+        let _ = ball.set_position(PhysicalPosition::new(pos.x, pos.y));
         let _ = ball.show();
         // 显示时强制重设尺寸并记录：创建时的 64×64 逻辑宽被某处撑到 135（实测），此处钳回
         let _ = ball.set_size(tauri::LogicalSize::new(56.0, 56.0));
         let _ = main.hide();
+        BALL_DRAGGING.store(true, std::sync::atomic::Ordering::SeqCst);
+        {
+            // 两段动画线程：段1 滑到边全露，段2 缩进贴点位；期间球窗隐藏则中止
+            let a2 = app.clone();
+            let ball2 = ball.clone();
+            std::thread::spawn(move || {
+                const STEPS: u32 = 10;
+                let anim = |fx: i32, fy: i32, tx2: i32, ty2: i32, steps: u32| {
+                    for i in 1..=steps {
+                        if !ball2.is_visible().unwrap_or(false) {
+                            return;
+                        }
+                        let t = i as f64 / steps as f64;
+                        let e = 1.0 - (1.0 - t) * (1.0 - t);
+                        let _ = ball2.set_position(PhysicalPosition::new(
+                            fx + ((tx2 - fx) as f64 * e).round() as i32,
+                            fy + ((ty2 - fy) as f64 * e).round() as i32,
+                        ));
+                        std::thread::sleep(std::time::Duration::from_millis(26));
+                    }
+                };
+                anim(pos.x, pos.y, edge_x, edge_y, STEPS);
+                std::thread::sleep(std::time::Duration::from_millis(120));
+                anim(edge_x, edge_y, dock_x, dock_y, STEPS);
+                BALL_DRAGGING.store(false, std::sync::atomic::Ordering::SeqCst);
+                let _ = a2; // app 借用占位
+            });
+        }
         let bsize = ball.outer_size().map(|s| (s.width, s.height));
         let bscale = ball.scale_factor().unwrap_or(1.0);
         eprintln!(
-            "[球] 收球 主窗隐藏，球就位 ({},{}) 球窗尺寸={bsize:?} scale={bscale}",
-            pos.x, pos.y
+            "[球] 收球 主窗隐藏，两段动画就位 ({},{})→边({},{})→贴({},{}) 尺寸={bsize:?} scale={bscale}",
+            pos.x, pos.y, edge_x, edge_y, dock_x, dock_y
         );
     } else {
         // 主窗在球的当前位置展开；出屏钳位（球贴边时展开不越过屏幕）

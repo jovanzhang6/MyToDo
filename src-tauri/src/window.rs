@@ -258,15 +258,19 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
     let state = app.state::<AppState>();
     if on {
         let pos = main.outer_position().unwrap_or_default();
-        let size = main.outer_size().unwrap_or_default();
+        // 客户区尺寸入账（outer 含边框补偿且每轮 set_size 复利膨胀，inner 恒定）
+        let (Ok(csize), Ok(osize)) = (main.inner_size(), main.outer_size()) else {
+            return;
+        };
+        let border = (osize.width - csize.width, osize.height - csize.height);
         {
             let mut db = state.db.lock().unwrap();
             let ws = *db.window.get_or_insert_with(Default::default);
             db.pre_ball = Some(WindowState {
                 x: pos.x,
                 y: pos.y,
-                width: size.width,
-                height: size.height,
+                width: csize.width,
+                height: csize.height,
                 always_on_top: ws.always_on_top,
                 opacity: ws.opacity,
                 ball_mode: false,
@@ -284,7 +288,7 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
             mon.size().height,
         );
         let (edge_x, edge_y) = (
-            if pos.x + size.width as i32 / 2 < m.0 + m.2 as i32 / 2 {
+            if pos.x + BALL_SIZE as i32 as i32 / 2 < m.0 + m.2 as i32 / 2 {
                 m.0
             } else {
                 m.0 + m.2 as i32 - BALL_SIZE as i32
@@ -364,10 +368,16 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
                 }
             }
         };
-        // pre_ball 是物理像素；set_size 用逻辑值表达同一视觉尺寸
-        let _ = main.set_size(tauri::LogicalSize::new(
-            target.0 as f64 / scale,
-            target.1 as f64 / scale,
+        // pre_ball 是客户区物理尺寸；按实测边框差值换算 set_size 的外框请求，
+        // 使恢复后的客户区恰好等于 pre_ball（彻底消除每轮 +22×13 的复利膨胀）
+        let (Ok(c_now), Ok(o_now)) = (main.inner_size(), main.outer_size()) else {
+            return;
+        };
+        let d_w = o_now.width - c_now.width;
+        let d_h = o_now.height - c_now.height;
+        let _ = main.set_size(tauri::PhysicalSize::new(
+            target.0 + d_w,
+            target.1 + d_h,
         ));
         // 出屏钳位：主窗右/下边缘不越出球所在显示器
         if let Ok(Some(monitor)) = ball.current_monitor() {
@@ -492,8 +502,8 @@ pub fn watch_geometry(app: &AppHandle, window: &WebviewWindow) {
                     win.outer_position().map(|p| p.y).unwrap_or(0),
                 ),
                 (
-                    win.outer_size().map(|s| s.width).unwrap_or(0),
-                    win.outer_size().map(|s| s.height).unwrap_or(0),
+                    win.inner_size().map(|s| s.width).unwrap_or(0),
+                    win.inner_size().map(|s| s.height).unwrap_or(0),
                 ),
             );
         }

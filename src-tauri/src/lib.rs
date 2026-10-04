@@ -10,8 +10,20 @@ use tauri::Manager;
 
 use crate::commands::AppState;
 
+/// 提升系统时钟精度到 1ms：收球/拖拽动画的 8ms 节拍依赖它（默认 15.6ms 会造成动画抖动）
+#[cfg(target_os = "windows")]
+fn raise_timer_precision() {
+    use windows::Win32::Media::timeBeginPeriod;
+    unsafe {
+        timeBeginPeriod(1);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    raise_timer_precision();
+
     tauri::Builder::default()
         // 单实例：二次启动唤起已有主窗，而不是开新进程
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {

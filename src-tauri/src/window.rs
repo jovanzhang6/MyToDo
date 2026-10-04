@@ -291,7 +291,7 @@ pub fn switch_ball_mode(app: &AppHandle, on: bool) {
             },
             pos.y.clamp(m.1, m.1 + m.3 as i32 - BALL_SIZE as i32),
         );
-        let (dock_x, dock_y) = dock_target(m, (pos.x, pos.y, BALL_SIZE, BALL_SIZE));
+        let (dock_x, dock_y) = dock_target(m, (edge_x, edge_y, BALL_SIZE, BALL_SIZE));
         let _ = ball.set_position(PhysicalPosition::new(pos.x, pos.y));
         let _ = ball.show();
         // 显示时强制重设尺寸并记录：创建时的 64×64 逻辑宽被某处撑到 135（实测），此处钳回

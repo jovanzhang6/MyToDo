@@ -56,11 +56,11 @@ const T_ADD = 176; // 点 ✓ 添加（A1）
 const T_CHECK1 = 240; // 勾选 A
 const T_CHECK2 = 286; // 勾选 D（晨间拉伸·每日）
 const T_RESET = 320; // 跨天演示：日期翻页，每日任务自动重来
-const T_BALL = 380; // 点标题栏 ◎
-const T_HOVER = 455; // 悬停球滑出
-const T_EXPAND = 482; // 点球展开
-const T_STATS = 516; // 点 📊
-const T_END = 600; // 收尾
+const T_BALL = 386; // 点标题栏 ◎（光标 378 到位、停 8 帧再点）
+const T_HOVER = 480; // 悬停球滑出
+const T_EXPAND = 500; // 点球展开
+const T_STATS = 540; // 点 📊
+const T_END = 630; // 收尾
 
 /* ── 工具 ── */
 const guardedSpring = (
@@ -88,14 +88,16 @@ const CURSOR_SEGS: Seg[] = [
   [260, fx(17, 235), fy(58), 278, fx(17, 235), fy(134)],
   [296, fx(17, 235), fy(134), 312, fx(60, 235), fy(210)],
   [312, fx(60, 235), fy(210), 366, fx(60, 235), fy(210)],
-  [366, fx(60, 235), fy(210), 382, fx(173, 235), fy(19)],
-  [386, fx(173, 235), fy(19), 426, 1830, 520],
-  [426, 1830, 520, 460, 2082, 540],
-  [460, 2082, 540, 478, 2082, 540],
-  [486, 2082, 540, 510, fx(199, 235), fy(19)],
-  [520, fx(199, 235), fy(19), 538, fx(230, 235), fy(60)],
+  [366, fx(60, 235), fy(210), 378, fx(173, 235), fy(19)],
+  [378, fx(173, 235), fy(19), 390, fx(173, 235), fy(19)],
+  [390, fx(173, 235), fy(19), 434, 1830, 520],
+  [434, 1830, 520, 470, 2082, 540],
+  [470, 2082, 540, 500, 2082, 540],
+  [502, 2082, 540, 522, fx(199, 235), fy(19)],
+  [522, fx(199, 235), fy(19), 544, fx(199, 235), fy(19)],
+  [544, fx(199, 235), fy(19), 562, fx(230, 235), fy(60)],
 ];
-const CLICKS = [102, 152, 158, 166, 176, 240, 286, 380, 482, 516];
+const CLICKS = [102, 152, 158, 166, 176, 240, 286, 386, 500, 540];
 
 const cursorPos = (t: number): [number, number] => {
   if (t <= CURSOR_SEGS[0][0]) return [CURSOR_SEGS[0][1], CURSOR_SEGS[0][2]];
@@ -730,7 +732,7 @@ const Widget: React.FC<{
                 justifyContent: "center",
                 color: k === "stats" && showStats ? ACCENT : DIM,
                 background:
-                  (k === "ball" && t >= T_BALL - 4 && t < T_BALL + 6) ||
+                  (k === "ball" && t >= T_BALL - 8 && t < T_BALL + 6) ||
                   (k === "stats" && t >= T_STATS - 4 && t < T_STATS + 6)
                     ? "rgba(255,255,255,0.55)"
                     : "transparent",
@@ -785,10 +787,10 @@ export const Promo: React.FC = () => {
 
   /* 小窗位置 / 缩放时间线 */
   const settleX = interpolate(f, [40, 70], [683, 235], { ...clamp, easing: easeIO });
-  const homeX = f < 40 ? 683 : f < 560 ? settleX : interpolate(f, [560, 590], [235, 683], { ...clamp, easing: easeIO });
+  const homeX = f < 40 ? 683 : f < 616 ? settleX : interpolate(f, [616, 644], [235, 683], { ...clamp, easing: easeIO });
 
-  /* 收球变形（点 ◎ 后小窗一边缩放一边随镜头飞向球的停靠点，镜头落定瞬间原位化作球） */
-  const morph = interpolate(f, [T_BALL, T_BALL + 30], [0, 1], { ...clamp, easing: easeIO });
+  /* 收球变形（点 ◎ 后小窗一边缩放一边随镜头飞向球的停靠点，镜头落定瞬间原位化作球；放慢节奏） */
+  const morph = interpolate(f, [T_BALL + 4, T_BALL + 40], [0, 1], { ...clamp, easing: easeIO });
   const expand = interpolate(f, [T_EXPAND, T_EXPAND + 26], [0, 1], { ...clamp, easing: easeIO });
   const m = Math.min(morph, 1 - expand);
   const wScale = WS * (1 - m * 0.93);
@@ -804,7 +806,7 @@ export const Promo: React.FC = () => {
     f < T_BALL
       ? interpolate(f, [0, 16], [0, 1], clamp)
       : f < T_EXPAND
-        ? interpolate(f, [T_BALL + 22, T_BALL + 30], [1, 0], clamp)
+        ? interpolate(f, [T_BALL + 32, T_BALL + 40], [1, 0], clamp)
         : interpolate(f, [T_EXPAND, T_EXPAND + 8], [0, 1], clamp);
   /* 收尾：小窗淡出 + 回中 */
   const endOut = interpolate(f, [T_END + 14, T_END + 42], [1, 0], clamp);
@@ -812,46 +814,46 @@ export const Promo: React.FC = () => {
   const finalOpacity = wOpacity * endOut;
 
   /* 球时间线：镜头落定后、在小窗消失的原位（停靠点）弹出；悬停时滑出全露 */
-  const ballPop = guardedSpring(f, T_BALL + 26, fps, 13, 120);
+  const ballPop = guardedSpring(f, T_BALL + 36, fps, 13, 120);
   const hoverOut = interpolate(f, [T_HOVER, T_HOVER + 16], [0, 1], { ...clamp, easing: easeIO });
   const ballX = 2143 - hoverOut * 61;
   const ballY = 540;
   const ballOpacity =
-    f < T_BALL + 26 ? 0 : f < T_EXPAND ? interpolate(f, [T_BALL + 26, T_BALL + 34], [0, 1], clamp) : interpolate(f, [T_EXPAND, T_EXPAND + 8], [1, 0], clamp);
+    f < T_BALL + 36 ? 0 : f < T_EXPAND ? interpolate(f, [T_BALL + 36, T_BALL + 44], [0, 1], clamp) : interpolate(f, [T_EXPAND, T_EXPAND + 8], [1, 0], clamp);
   const ballScale = 0.4 + ballPop * 0.6;
 
   const showStats = f >= T_STATS;
 
   /* 收球段 punch-in 镜头：镜头推向右缘的球，展开时拉回 */
   const camZ =
-    f < 380
+    f < 390
       ? 1
-      : f < 410
-        ? interpolate(f, [380, 410], [1, 1.8], { ...clamp, easing: easeIO })
-        : f < 482
+      : f < 426
+        ? interpolate(f, [390, 426], [1, 1.8], { ...clamp, easing: easeIO })
+        : f < 500
           ? 1.8
-          : f < 508
-            ? interpolate(f, [482, 508], [1.8, 1], { ...clamp, easing: easeIO })
+          : f < 528
+            ? interpolate(f, [500, 528], [1.8, 1], { ...clamp, easing: easeIO })
             : 1;
   const camX =
-    f < 380
+    f < 390
       ? 0
-      : f < 410
-        ? interpolate(f, [380, 410], [0, -1082], { ...clamp, easing: easeIO })
-        : f < 482
+      : f < 426
+        ? interpolate(f, [390, 426], [0, -1082], { ...clamp, easing: easeIO })
+        : f < 500
           ? -1082
-          : f < 508
-            ? interpolate(f, [482, 508], [-1082, 0], { ...clamp, easing: easeIO })
+          : f < 528
+            ? interpolate(f, [500, 528], [-1082, 0], { ...clamp, easing: easeIO })
             : 0;
   const camY =
-    f < 380
+    f < 390
       ? 0
-      : f < 410
-        ? interpolate(f, [380, 410], [0, -240], { ...clamp, easing: easeIO })
-        : f < 482
+      : f < 426
+        ? interpolate(f, [390, 426], [0, -240], { ...clamp, easing: easeIO })
+        : f < 500
           ? -240
-          : f < 508
-            ? interpolate(f, [482, 508], [-240, 0], { ...clamp, easing: easeIO })
+          : f < 528
+            ? interpolate(f, [500, 528], [-240, 0], { ...clamp, easing: easeIO })
             : 0;
 
   const capO = (a: number, b: number, c: number, d: number) =>
@@ -943,10 +945,10 @@ export const Promo: React.FC = () => {
           x={1265}
           y={484}
           lines={["收进一颗球，", "贴边，不挡屏幕。"]}
-          o={capO(422, 442, 470, 486)}
+          o={capO(440, 458, 488, 504)}
           size={62}
         />
-        <Caption x={1010} y={360} lines={["坚持，看得见。"]} sub="完成率 · 连续打卡 · 按期率" o={capO(532, 550, 596, 614)} />
+        <Caption x={1010} y={360} lines={["坚持，看得见。"]} sub="完成率 · 连续打卡 · 按期率" o={capO(556, 574, 600, 618)} />
 
         {/* 光标 */}
         <Cursor f={f} />
@@ -954,11 +956,11 @@ export const Promo: React.FC = () => {
 
       {/* 尾板（待小窗淡出后再入场，避免重叠） */}
       {(() => {
-        const o1 = interpolate(f, [636, 654], [0, 1], { ...clamp, easing: easeOut });
-        const o2 = interpolate(f, [652, 668], [0, 1], { ...clamp, easing: easeOut });
-        const o3 = interpolate(f, [662, 678], [0, 1], { ...clamp, easing: easeOut });
-        const pop = Math.max(guardedSpring(f, 636, fps, 14, 90), 0.001);
-        if (f < 634) return null;
+        const o1 = interpolate(f, [660, 678], [0, 1], { ...clamp, easing: easeOut });
+        const o2 = interpolate(f, [676, 692], [0, 1], { ...clamp, easing: easeOut });
+        const o3 = interpolate(f, [686, 702], [0, 1], { ...clamp, easing: easeOut });
+        const pop = Math.max(guardedSpring(f, 660, fps, 14, 90), 0.001);
+        if (f < 658) return null;
         return (
           <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
             <div

@@ -54,12 +54,13 @@ const T_KIND = 152; // 点「限时」
 const T_PLUS1 = 158; // 点「+1天」×2
 const T_ADD = 176; // 点 ✓ 添加（A1）
 const T_CHECK1 = 240; // 勾选 A
-const T_CHECK2 = 286; // 勾选 D
-const T_BALL = 350; // 点标题栏 ◎
-const T_HOVER = 425; // 悬停球滑出
-const T_EXPAND = 452; // 点球展开
-const T_STATS = 486; // 点 📊
-const T_END = 570; // 收尾
+const T_CHECK2 = 286; // 勾选 D（晨间拉伸·每日）
+const T_RESET = 320; // 跨天演示：日期翻页，每日任务自动重来
+const T_BALL = 380; // 点标题栏 ◎
+const T_HOVER = 455; // 悬停球滑出
+const T_EXPAND = 482; // 点球展开
+const T_STATS = 516; // 点 📊
+const T_END = 600; // 收尾
 
 /* ── 工具 ── */
 const guardedSpring = (
@@ -86,14 +87,15 @@ const CURSOR_SEGS: Seg[] = [
   [218, fx(300, 235), fy(560), 234, fx(17, 235), fy(58)],
   [260, fx(17, 235), fy(58), 278, fx(17, 235), fy(134)],
   [296, fx(17, 235), fy(134), 312, fx(60, 235), fy(210)],
-  [330, fx(60, 235), fy(210), 346, fx(173, 235), fy(19)],
-  [356, fx(173, 235), fy(19), 396, 1830, 520],
-  [396, 1830, 520, 430, 2082, 540],
-  [430, 2082, 540, 448, 2082, 540],
-  [456, 2082, 540, 480, fx(199, 235), fy(19)],
-  [490, fx(199, 235), fy(19), 508, fx(230, 235), fy(60)],
+  [312, fx(60, 235), fy(210), 366, fx(60, 235), fy(210)],
+  [366, fx(60, 235), fy(210), 382, fx(173, 235), fy(19)],
+  [386, fx(173, 235), fy(19), 426, 1830, 520],
+  [426, 1830, 520, 460, 2082, 540],
+  [460, 2082, 540, 478, 2082, 540],
+  [486, 2082, 540, 510, fx(199, 235), fy(19)],
+  [520, fx(199, 235), fy(19), 538, fx(230, 235), fy(60)],
 ];
-const CLICKS = [102, 152, 158, 166, 176, 240, 286, 350, 452, 486];
+const CLICKS = [102, 152, 158, 166, 176, 240, 286, 380, 482, 516];
 
 const cursorPos = (t: number): [number, number] => {
   if (t <= CURSOR_SEGS[0][0]) return [CURSOR_SEGS[0][1], CURSOR_SEGS[0][2]];
@@ -264,15 +266,20 @@ const TaskRow: React.FC<{
   badge: string;
   badgeClass: "open" | "daily" | "limited";
   doneAt: number; // <0 表示未勾选
+  undoneAt?: number; // >=0 时该帧起自动取消勾选（每日任务跨天重来）
   t: number;
   fps: number;
   appearAt: number; // <0 无出场动画
-}> = ({ slotY, text, badge, badgeClass, doneAt, t, fps, appearAt }) => {
-  const done = doneAt >= 0 && t >= doneAt;
+}> = ({ slotY, text, badge, badgeClass, doneAt, undoneAt = -1, t, fps, appearAt }) => {
+  const done = doneAt >= 0 && t >= doneAt && !(undoneAt >= 0 && t >= undoneAt);
   const pop = done ? Math.max(guardedSpring(t, doneAt, fps, 12, 200), 0.001) : 1;
   const strike = done
     ? interpolate(t, [doneAt + 3, doneAt + 14], [0, 1], { ...clamp, easing: easeOut })
     : 0;
+  /* 跨天重置：勾选块回弹、划线淡出 */
+  const resetPop = undoneAt >= 0 && t >= undoneAt ? spring({ frame: t - undoneAt, fps, config: { damping: 14, stiffness: 180 } }) : 0;
+  const boxScale = done ? pop : resetPop > 0 ? 1 + Math.sin(Math.min(resetPop * Math.PI, Math.PI)) * 0.18 : 1;
+  const strikeFade = !done && undoneAt >= 0 && t >= undoneAt ? 1 - interpolate(t, [undoneAt, undoneAt + 10], [0, 1], clamp) : 1;
   const appear =
     appearAt >= 0 ? interpolate(t, [appearAt, appearAt + 14], [0, 1], { ...clamp, easing: easeOut }) : 1;
   const badgeStyle: React.CSSProperties =
@@ -312,7 +319,7 @@ const TaskRow: React.FC<{
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          transform: `scale(${pop})`,
+          transform: `scale(${boxScale})`,
         }}
       >
         {done && (
@@ -323,7 +330,7 @@ const TaskRow: React.FC<{
       </div>
       <div style={{ position: "relative", flex: 1, fontSize: 13, lineHeight: 1.4, color: done ? "#46586c" : INK }}>
         {text}
-        {done && (
+        {(done || strikeFade > 0) && (
           <div
             style={{
               position: "absolute",
@@ -332,6 +339,7 @@ const TaskRow: React.FC<{
               height: 2.2,
               width: `${strike * 100}%`,
               background: "#223247",
+              opacity: strikeFade,
             }}
           />
         )}
@@ -361,15 +369,18 @@ const ListView: React.FC<{ t: number; fps: number; visible: boolean }> = ({ t, f
   const A1 = T_ADD;
   const rowDefs = [
     { key: "A", text: "交季度报告", badge: "限时 · 后天到期", cls: "limited" as const, base: -1,
-      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: 4 }, { at: T_CHECK2, d: -1 }], doneAt: T_CHECK1, appear: A1 },
+      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: 4 }, { at: T_CHECK2, d: -1 }, { at: T_RESET, d: 1 }],
+      doneAt: T_CHECK1, undoneAt: -1, appear: A1 },
     { key: "B", text: "整理灵感清单", badge: "不限时", cls: "open" as const, base: 0,
-      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }], doneAt: -1, appear: -1 },
+      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }], doneAt: -1, undoneAt: -1, appear: -1 },
     { key: "C", text: "回复客户邮件", badge: "不限时", cls: "open" as const, base: 1,
-      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }], doneAt: -1, appear: -1 },
+      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }], doneAt: -1, undoneAt: -1, appear: -1 },
     { key: "D", text: "晨间拉伸", badge: "每日", cls: "daily" as const, base: 2,
-      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }, { at: T_CHECK2, d: 2 }], doneAt: T_CHECK2, appear: -1 },
+      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }, { at: T_CHECK2, d: 2 }, { at: T_RESET, d: -2 }],
+      doneAt: T_CHECK2, undoneAt: T_RESET, appear: -1 },
     { key: "E", text: "夜间复盘", badge: "每日", cls: "daily" as const, base: 3,
-      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }, { at: T_CHECK2, d: -1 }], doneAt: -1, appear: -1 },
+      steps: [{ at: A1, d: 1 }, { at: T_CHECK1, d: -1 }, { at: T_CHECK2, d: -1 }, { at: T_RESET, d: 1 }],
+      doneAt: -1, undoneAt: -1, appear: -1 },
   ];
   const typed =
     t < T_ADD
@@ -387,14 +398,21 @@ const ListView: React.FC<{ t: number; fps: number; visible: boolean }> = ({ t, f
         {rowDefs.map((r) => {
           const slot =
             r.base + r.steps.reduce((acc, s) => acc + s.d * guardedSpring(t, s.at, fps), 0);
+          const badge =
+            r.key === "A"
+              ? t >= T_RESET
+                ? "限时 · 明天到期"
+                : "限时 · 后天到期"
+              : r.badge;
           return (
             <TaskRow
               key={r.key}
               slotY={4 + slot * ROW_H}
               text={r.text}
-              badge={r.badge}
+              badge={badge}
               badgeClass={r.cls}
               doneAt={r.doneAt}
+              undoneAt={r.undoneAt}
               appearAt={r.appear}
               t={t}
               fps={fps}
@@ -685,8 +703,19 @@ const Widget: React.FC<{
     >
       {/* 标题栏 */}
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 38, padding: "0 10px" }}>
-        <span style={{ fontWeight: 600, letterSpacing: 0.5, color: DIM, fontSize: 13, fontFamily: SANS }}>
-          10月4日 周日
+        <span style={{ position: "relative", fontWeight: 600, letterSpacing: 0.5, color: DIM, fontSize: 13, fontFamily: SANS }}>
+          <span style={{ opacity: t < T_RESET ? 1 : 0 }}>10月4日 周日</span>
+          <span
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              opacity: t >= T_RESET ? interpolate(t, [T_RESET, T_RESET + 8], [0, 1], clamp) : 0,
+              transform: `translateY(${t >= T_RESET ? (1 - interpolate(t, [T_RESET, T_RESET + 8], [0, 1], { ...clamp, easing: easeOut })) * 8 : 8}px)`,
+            }}
+          >
+            10月5日 周一
+          </span>
         </span>
         <span style={{ display: "flex" }}>
           {(["ball", "stats", "settings", "pin", "close"] as const).map((k) => (
@@ -795,34 +824,34 @@ export const Promo: React.FC = () => {
 
   /* 收球段 punch-in 镜头：镜头推向右缘的球，展开时拉回 */
   const camZ =
-    f < 350
+    f < 380
       ? 1
-      : f < 380
-        ? interpolate(f, [350, 380], [1, 1.8], { ...clamp, easing: easeIO })
-        : f < 452
+      : f < 410
+        ? interpolate(f, [380, 410], [1, 1.8], { ...clamp, easing: easeIO })
+        : f < 482
           ? 1.8
-          : f < 478
-            ? interpolate(f, [452, 478], [1.8, 1], { ...clamp, easing: easeIO })
+          : f < 508
+            ? interpolate(f, [482, 508], [1.8, 1], { ...clamp, easing: easeIO })
             : 1;
   const camX =
-    f < 350
+    f < 380
       ? 0
-      : f < 380
-        ? interpolate(f, [350, 380], [0, -1082], { ...clamp, easing: easeIO })
-        : f < 452
+      : f < 410
+        ? interpolate(f, [380, 410], [0, -1082], { ...clamp, easing: easeIO })
+        : f < 482
           ? -1082
-          : f < 478
-            ? interpolate(f, [452, 478], [-1082, 0], { ...clamp, easing: easeIO })
+          : f < 508
+            ? interpolate(f, [482, 508], [-1082, 0], { ...clamp, easing: easeIO })
             : 0;
   const camY =
-    f < 350
+    f < 380
       ? 0
-      : f < 380
-        ? interpolate(f, [350, 380], [0, -240], { ...clamp, easing: easeIO })
-        : f < 452
+      : f < 410
+        ? interpolate(f, [380, 410], [0, -240], { ...clamp, easing: easeIO })
+        : f < 482
           ? -240
-          : f < 478
-            ? interpolate(f, [452, 478], [-240, 0], { ...clamp, easing: easeIO })
+          : f < 508
+            ? interpolate(f, [482, 508], [-240, 0], { ...clamp, easing: easeIO })
             : 0;
 
   const capO = (a: number, b: number, c: number, d: number) =>
@@ -901,15 +930,23 @@ export const Promo: React.FC = () => {
         {/* 文案（开场纯产品，无浮字；品牌在尾板） */}
 
         <Caption x={1010} y={360} lines={["想到，就记下。"]} sub="不限时 · 每日 · 限时，回车即加" o={capO(74, 92, 214, 232)} />
-        <Caption x={1010} y={360} lines={["完成，点一下就好。"]} sub="已完成的自动沉底，不打扰" o={capO(228, 246, 306, 324)} />
+        <Caption x={1010} y={360} lines={["完成，点一下就好。"]} sub="已完成的自动沉底，不打扰" o={capO(228, 246, 298, 314)} />
+        <Caption
+          x={1010}
+          y={360}
+          lines={["每日任务，睡一觉自己回来。"]}
+          sub="每天 00:00 自动重来，习惯不断档"
+          o={capO(314, 332, 350, 366)}
+          size={50}
+        />
         <Caption
           x={1265}
           y={484}
           lines={["收进一颗球，", "贴边，不挡屏幕。"]}
-          o={capO(392, 412, 440, 456)}
+          o={capO(422, 442, 470, 486)}
           size={62}
         />
-        <Caption x={1010} y={360} lines={["坚持，看得见。"]} sub="完成率 · 连续打卡 · 按期率" o={capO(502, 520, 566, 584)} />
+        <Caption x={1010} y={360} lines={["坚持，看得见。"]} sub="完成率 · 连续打卡 · 按期率" o={capO(532, 550, 596, 614)} />
 
         {/* 光标 */}
         <Cursor f={f} />
@@ -917,11 +954,11 @@ export const Promo: React.FC = () => {
 
       {/* 尾板（待小窗淡出后再入场，避免重叠） */}
       {(() => {
-        const o1 = interpolate(f, [606, 624], [0, 1], { ...clamp, easing: easeOut });
-        const o2 = interpolate(f, [622, 638], [0, 1], { ...clamp, easing: easeOut });
-        const o3 = interpolate(f, [632, 648], [0, 1], { ...clamp, easing: easeOut });
-        const pop = Math.max(guardedSpring(f, 606, fps, 14, 90), 0.001);
-        if (f < 604) return null;
+        const o1 = interpolate(f, [636, 654], [0, 1], { ...clamp, easing: easeOut });
+        const o2 = interpolate(f, [652, 668], [0, 1], { ...clamp, easing: easeOut });
+        const o3 = interpolate(f, [662, 678], [0, 1], { ...clamp, easing: easeOut });
+        const pop = Math.max(guardedSpring(f, 636, fps, 14, 90), 0.001);
+        if (f < 634) return null;
         return (
           <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
             <div

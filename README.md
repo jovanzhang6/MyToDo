@@ -4,6 +4,8 @@
 
 **再好的 TODO，不如一个用得下去的。**
 
+[![本项目由 GLM-5.3-Flash 开发](https://img.shields.io/badge/本项目由-GLM--5.3--Flash_开发-3d8bd4?style=for-the-badge)](https://chatglm.cn)
+
 [![CI](https://github.com/jovanzhang6/MyToDo/actions/workflows/ci.yml/badge.svg)](https://github.com/jovanzhang6/MyToDo/actions/workflows/ci.yml)
 [![Release](https://github.com/jovanzhang6/MyToDo/actions/workflows/release.yml/badge.svg)](https://github.com/jovanzhang6/MyToDo/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -12,7 +14,7 @@
 
 <img src="docs/assets/demo.gif" alt="MyToDo 宣传演示" width="100%">
 
-*完整宣传视频：[docs/assets/promo.mp4](docs/assets/promo.mp4) · 由 [Remotion](https://www.remotion.dev/) 逐帧渲染，配乐为程序化合成*
+*完整宣传视频：[docs/assets/promo.mp4](docs/assets/promo.mp4) · 由 [Remotion](https://www.remotion.dev/) 逐帧渲染，画面中所有界面均按真实源码像素级复刻*
 
 English | [简体中文](#功能)
 

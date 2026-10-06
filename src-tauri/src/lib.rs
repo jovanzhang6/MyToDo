@@ -38,6 +38,7 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let handle = app.handle().clone();
             let db_path = handle
@@ -117,7 +118,8 @@ pub fn run() {
             commands::dock_ball,
             commands::undock_ball,
             commands::log_frontend,
-            commands::hide_window
+            commands::hide_window,
+            commands::open_repo
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

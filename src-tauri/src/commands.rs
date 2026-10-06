@@ -186,6 +186,15 @@ pub fn log_frontend(msg: String) {
     eprintln!("[前端] {msg}");
 }
 
+/// 打开 GitHub 仓库主页（设置页求 Star 入口）：系统默认浏览器，不污染小窗 WebView。
+#[tauri::command]
+pub fn open_repo(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_url("https://github.com/jovanzhang6/MyToDo", None::<&str>)
+        .map_err(|e| format!("打开浏览器失败：{e}"))
+}
+
 /// 设置玻璃层不透明度（0.10–0.95）：落盘并即时重涂 Acrylic 材质。
 #[tauri::command]
 pub fn set_opacity(

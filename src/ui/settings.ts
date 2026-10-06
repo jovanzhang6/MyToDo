@@ -41,6 +41,11 @@ export function initSettingsPage(): void {
     const on = (e.target as HTMLInputElement).checked;
     invoke("set_always_on_top", { on }).catch((err) => showTip(String(err)));
   });
+
+  // 求 Star：系统浏览器打开仓库主页
+  document.getElementById("btn-star")!.addEventListener("click", () => {
+    invoke("open_repo").catch((err) => showTip(String(err)));
+  });
 }
 
 function wireToggle(id: string, cmd: string, argName: string): void {

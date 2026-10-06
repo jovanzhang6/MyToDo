@@ -894,6 +894,38 @@ body.ball-window #view-ball {
   margin-bottom: 4px;
 }
 
+/* 求 Star 入口：平时淡雅悬停变实，卡片内的行动号召 */
+.star-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid rgba(61, 139, 212, 0.35);
+  border-radius: 8px;
+  background: rgba(61, 139, 212, 0.1);
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.star-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.star-note {
+  display: block;
+  margin-top: 6px;
+  line-height: 1.6;
+}
+
 #btn-add svg {
   color: #fff;
 }

@@ -271,7 +271,8 @@ body {
   cursor: pointer;
 }
 
-.kind-pop input[type="date"] {
+.kind-pop input[type="date"],
+.kind-pop input[type="time"] {
   border: 1px solid rgba(120, 150, 180, 0.4);
   border-radius: 5px;
   font: inherit;
@@ -354,7 +355,7 @@ body {
 }
 
 #due-date {
-  width: 104px;
+  width: 94px;
   border: 1px solid rgba(120, 150, 180, 0.4);
   border-radius: 999px;
   font: inherit;
@@ -362,6 +363,32 @@ body {
   padding: 2px 6px;
   background: rgba(255, 255, 255, 0.8);
   color: var(--ink);
+}
+
+#due-time {
+  width: 70px;
+  border: 1px solid rgba(120, 150, 180, 0.4);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink);
+}
+
+/* 限时任务 <15 分钟到期：红色徽章极轻呼吸（无位移无缩放） */
+.badge.limited.due-today.due-now {
+  animation: due-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes due-pulse {
+  0%,
+  100% {
+    background: rgba(212, 72, 61, 0.16);
+  }
+  50% {
+    background: rgba(212, 72, 61, 0.36);
+  }
 }
 
 #due-wrap .quick {
@@ -379,11 +406,6 @@ body {
 #due-wrap .quick:hover {
   color: var(--accent);
   background: rgba(61, 139, 212, 0.15);
-}
-
-.due-label {
-  color: var(--ink-dim);
-  white-space: nowrap;
 }
 
 #input-row {

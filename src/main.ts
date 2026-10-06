@@ -13,6 +13,8 @@ export interface TaskView {
   text: string;
   kind: "daily" | "limited" | "open";
   due_date: string | null;
+  /** "HH:MM:SS"（后端 ISO 格式，展示取前 5 位）；null = 旧天粒度任务 */
+  due_time: string | null;
   due_today: boolean;
   done: boolean;
 }

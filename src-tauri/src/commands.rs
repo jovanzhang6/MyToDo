@@ -2,7 +2,7 @@
 
 use std::sync::Mutex;
 
-use chrono::{Local, NaiveDate};
+use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
@@ -16,6 +16,11 @@ pub struct AppState {
 
 pub fn today() -> NaiveDate {
     Local::now().date_naive()
+}
+
+/// 引擎纪律「时间一律注入」的注入源：本地 naive 时刻（日期 + 时分秒）。
+pub fn now() -> NaiveDateTime {
+    Local::now().naive_local()
 }
 
 #[derive(Serialize)]
@@ -45,19 +50,16 @@ fn finalize(app: &AppHandle, state: &AppState, changed: bool) -> Result<(), Stri
 pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
     let state = app.state::<AppState>();
     let mut db = state.db.lock().unwrap();
-    let today = today();
+    let now = now();
+    let today = now.date();
     let mut changed = todo::roll_over(&mut db, today);
 
-    // 到期提醒：跨天/唤醒后检查一次；发送与否都随本次落盘（去重标记）
-    let due = crate::notify::due_decision(&db, today);
-    let reminder_changed = match due {
-        crate::notify::DueDecision::Notify(names) => {
-            crate::notify::send_and_mark(&app, &mut db, today, &names);
-            true
-        }
-        crate::notify::DueDecision::Skip => false,
-    };
-    changed |= reminder_changed;
+    // 时刻级过期 + 到期提醒：跨天/唤醒后检查一次；发送与否都随本次落盘（阶段标记防重发）
+    changed |= todo::expire_now(&mut db, now);
+    for notice in crate::notify::reminder_decision(&db, now) {
+        crate::notify::send_stage(&app, &mut db, &notice);
+        changed = true;
+    }
 
     let dto = StateDto {
         today,
@@ -78,16 +80,31 @@ pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
     Ok(dto)
 }
 
+/// 解析前端传来的 "HH:MM" 时刻（空串/缺省 = None，天粒度语义）。
+fn parse_due_time(due_time: Option<&str>) -> Result<Option<NaiveTime>, String> {
+    match due_time.unwrap_or("") {
+        "" => Ok(None),
+        s => NaiveTime::parse_from_str(s, "%H:%M")
+            .map(Some)
+            .map_err(|_| "时刻格式应为 HH:MM".to_string()),
+    }
+}
+
 #[tauri::command]
 pub fn add_task(
     app: AppHandle,
     text: String,
     kind: Kind,
     due_date: Option<NaiveDate>,
+    due_time: Option<String>,
 ) -> Result<String, String> {
     let state = app.state::<AppState>();
+    let time = parse_due_time(due_time.as_deref())?;
+    if kind == Kind::Limited && matches!(due_date, Some(due) if todo::due_in_past(due, time, now())) {
+        return Err("这个时间已经过了，选一个未来的时刻".to_string());
+    }
     let mut db = state.db.lock().unwrap();
-    let result = todo::add_task(&mut db, today(), &text, kind, due_date);
+    let result = todo::add_task_with_time(&mut db, today(), &text, kind, due_date, time);
     let changed = result.is_ok();
     drop(db);
     finalize(&app, &state, changed)?;
@@ -111,10 +128,15 @@ pub fn set_kind(
     id: String,
     kind: Kind,
     due_date: Option<NaiveDate>,
+    due_time: Option<String>,
 ) -> Result<(), String> {
     let state = app.state::<AppState>();
+    let time = parse_due_time(due_time.as_deref())?;
+    if kind == Kind::Limited && matches!(due_date, Some(due) if todo::due_in_past(due, time, now())) {
+        return Err("这个时间已经过了，选一个未来的时刻".to_string());
+    }
     let mut db = state.db.lock().unwrap();
-    let result = todo::set_kind(&mut db, &id, kind, due_date);
+    let result = todo::set_kind(&mut db, &id, kind, due_date, time);
     let changed = result.is_ok();
     drop(db);
     finalize(&app, &state, changed)?;
@@ -272,4 +294,37 @@ pub fn hide_window(app: AppHandle, window: WebviewWindow) -> Result<(), String> 
             .show();
     }
     Ok(())
+}
+
+/// 时分级提醒轮询（30 秒一拍）：窗口隐藏时 WebView2 会节流前端定时器，到期判定必须由
+/// Rust 侧驱动。这里只做「锁库 → 纯函数判定 → 发送 → 落盘 → 广播」的薄壳；与 get_state
+/// 走同一套判定，Task.notified_stage 阶段标记保证两条路径幂等。
+pub fn start_reminder_loop(app: AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(30));
+        reminder_tick(&app);
+    });
+}
+
+fn reminder_tick(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let now = now();
+    let mut changed = false;
+    let notices;
+    {
+        let mut db = state.db.lock().unwrap();
+        changed |= todo::roll_over(&mut db, now.date());
+        changed |= todo::expire_now(&mut db, now);
+        notices = crate::notify::reminder_decision(&db, now);
+        for n in &notices {
+            crate::notify::send_stage(app, &mut db, n);
+        }
+        changed |= !notices.is_empty();
+    }
+    if changed {
+        if let Err(e) = crate::store::save(&state.db.lock().unwrap(), &state.path) {
+            eprintln!("提醒轮询落盘失败：{e}");
+        }
+        let _ = app.emit("state-changed", ());
+    }
 }

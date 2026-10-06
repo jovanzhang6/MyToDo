@@ -8,14 +8,41 @@ const KIND_LABEL: Record<TaskView["kind"], string> = {
   open: "不限时",
 };
 
-/** 限时任务的到期徽标文案与样式 */
-function dueBadge(task: TaskView, today: string): { text: string; dueToday: boolean } | null {
+/** 限时任务的到期徽标文案与样式（时刻粒度：今天/明天带时刻；<15 分钟加急脉动） */
+function dueBadge(
+  task: TaskView,
+  today: string
+): { text: string; dueToday: boolean; soon: boolean } | null {
   if (task.kind !== "limited" || !task.due_date) return null;
+  const hm = task.due_time ? task.due_time.slice(0, 5) : null;
+  const mins = minutesUntil(task.due_date, task.due_time);
   const diff = daysBetween(today, task.due_date);
-  if (diff <= 0) return { text: "今天到期", dueToday: true };
-  if (diff === 1) return { text: "明天到期", dueToday: false };
-  if (diff === 2) return { text: "后天到期", dueToday: false };
-  return { text: `${diff}天后到期`, dueToday: false };
+  if ((mins !== null && mins <= 0) || diff < 0) {
+    return { text: "已到期", dueToday: true, soon: true };
+  }
+  if (diff >= 2) {
+    return { text: diff === 2 ? "后天到期" : `${diff}天后到期`, dueToday: false, soon: false };
+  }
+  if (diff === 1) {
+    return {
+      text: hm ? `明天 ${hm}` : "明天到期",
+      dueToday: false,
+      soon: (mins ?? Infinity) < 15,
+    };
+  }
+  return {
+    text: hm ? `今天 ${hm}` : "今天到期",
+    dueToday: true,
+    soon: (mins ?? Infinity) < 15,
+  };
+}
+
+/** 距到期分钟的分钟数（本地时钟，仅展示；过期归档由后端裁决）。天粒度任务返回 null */
+function minutesUntil(dueDate: string, dueTime: string | null): number | null {
+  if (!dueTime) return null;
+  const t = new Date(`${dueDate}T${dueTime.slice(0, 5)}:00`);
+  if (isNaN(t.getTime())) return null;
+  return Math.round((t.getTime() - Date.now()) / 60_000);
 }
 
 function daysBetween(from: string, to: string): number {
@@ -68,6 +95,7 @@ function buildRow(task: TaskView, today: string, refresh: Refresh): HTMLElement 
     if (due) {
       badge.textContent = `${KIND_LABEL.limited} · ${due.text}`;
       badge.classList.toggle("due-today", due.dueToday);
+      badge.classList.toggle("due-now", due.soon);
     }
   }
   // 点击徽标 = 修改类型 / 到期日（B7）
@@ -123,7 +151,7 @@ function beginEdit(
   row.querySelector(".badge")?.setAttribute("hidden", "true");
 }
 
-/** 类型修改气泡：三类互转；转限时需日期（沿用原日期可改期） */
+/** 类型修改气泡：三类互转；转限时需日期与时刻（沿用原值可改期） */
 function openKindPop(e: MouseEvent, task: TaskView, refresh: Refresh): void {
   e.stopPropagation();
   closeKindPop();
@@ -149,6 +177,11 @@ function openKindPop(e: MouseEvent, task: TaskView, refresh: Refresh): void {
   due.value = task.due_date ?? "";
   pop.appendChild(due);
 
+  const dueT = document.createElement("input");
+  dueT.type = "time";
+  dueT.value = task.due_time ? task.due_time.slice(0, 5) : "";
+  pop.appendChild(dueT);
+
   const ok = document.createElement("button");
   ok.className = "pop-ok";
   ok.textContent = "确认";
@@ -156,7 +189,8 @@ function openKindPop(e: MouseEvent, task: TaskView, refresh: Refresh): void {
     const kind = (pop.querySelector<HTMLInputElement>('[name="pop-kind"]:checked')?.value ??
       task.kind) as TaskView["kind"];
     const dueDate = kind === "limited" ? due.value || null : null;
-    invoke("set_kind", { id: task.id, kind, dueDate })
+    const dueTime = kind === "limited" ? dueT.value || null : null;
+    invoke("set_kind", { id: task.id, kind, dueDate, dueTime })
       .then(refresh)
       .catch((err) => showTip(String(err)));
     closeKindPop();
@@ -166,7 +200,7 @@ function openKindPop(e: MouseEvent, task: TaskView, refresh: Refresh): void {
   document.body.appendChild(pop);
   const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
   pop.style.left = Math.min(r.left, window.innerWidth - 200) + "px";
-  pop.style.top = Math.min(r.bottom + 4, window.innerHeight - 170) + "px";
+  pop.style.top = Math.min(r.bottom + 4, window.innerHeight - 200) + "px";
 
   setTimeout(() => document.addEventListener("mousedown", onOutside), 0);
 }

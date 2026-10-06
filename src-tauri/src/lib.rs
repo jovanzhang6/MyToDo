@@ -68,6 +68,8 @@ pub fn run() {
             window::watch_geometry(&handle, &window);
             window::start_ball_watcher(&handle);
             tray::setup(&handle)?;
+            // 时分级到期提醒：Rust 侧 30 秒轮询（窗口隐藏/托盘态也照常触发）
+            commands::start_reminder_loop(handle.clone());
             // 几何/材质就绪后再显示，避免「左上角白窗闪现再跳右上角」
             window.show().expect("无法显示主窗口");
 

@@ -36,8 +36,8 @@
             <label><input type="radio" name="kind" value="daily" /><span class="kind-name">每日</span></label>
             <label><input type="radio" name="kind" value="limited" /><span class="kind-name">限时</span></label>
             <span id="due-wrap" hidden>
-              <span class="due-label">截止</span>
               <input type="date" id="due-date" />
+              <input type="time" id="due-time" value="23:59" />
             </span>
           </div>
           <div id="input-row">
@@ -107,7 +107,7 @@
           <section class="card">
             <h3>行为</h3>
             <div class="set-row">
-              <span>到期提醒<small>限时任务到期当天通知一次</small></span>
+              <span>到期提醒<small>限时任务到期前 1 小时和 15 分钟各提醒一次</small></span>
               <label class="switch"><input type="checkbox" id="reminders-toggle" /><i></i></label>
             </div>
             <div class="set-row" id="backlog-row">

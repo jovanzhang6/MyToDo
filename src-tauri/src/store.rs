@@ -90,6 +90,55 @@ mod tests {
         assert_eq!(db.schema_version, SCHEMA_VERSION);
     }
 
+    // ── 时刻粒度字段（2026-10-06）：新字段 serde default 双向兼容 ──
+    #[test]
+    fn b11_roundtrip_preserves_due_time_and_stage() {
+        use crate::todo::add_task_with_time;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        let mut db = new_database();
+        add_task_with_time(
+            &mut db,
+            today(),
+            "带时刻",
+            Kind::Limited,
+            Some(today().succ_opt().unwrap()),
+            Some(chrono::NaiveTime::from_hms_opt(18, 30, 0).unwrap()),
+        )
+        .unwrap();
+        db.tasks[0].notified_stage = 1;
+        save(&db, &path).unwrap();
+
+        let loaded = load(&path).unwrap();
+        assert_eq!(loaded.tasks[0].due_time, Some(chrono::NaiveTime::from_hms_opt(18, 30, 0).unwrap()));
+        assert_eq!(loaded.tasks[0].notified_stage, 1);
+        assert_eq!(loaded.tasks, db.tasks);
+    }
+
+    #[test]
+    fn b11_old_json_without_time_fields_loads_as_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        // 模拟升级前的 v1 数据文件：无 due_time / notified_stage / schema_version=1
+        let legacy = format!(
+            r#"{{
+                "schema_version": 1,
+                "last_active_date": "2026-09-24",
+                "tasks": [
+                    {{"id": "t1", "text": "旧任务", "kind": "limited",
+                      "due_date": "2026-09-26", "created_date": "2026-09-24"}}
+                ],
+                "archive": []
+            }}"#
+        );
+        std::fs::write(&path, legacy).unwrap();
+        let db = load(&path).unwrap();
+        assert_eq!(db.tasks.len(), 1);
+        assert_eq!(db.tasks[0].due_time, None, "旧数据无时刻");
+        assert_eq!(db.tasks[0].notified_stage, 0, "旧数据无提醒记账");
+        assert_eq!(db.tasks[0].due_date, Some(chrono::NaiveDate::from_ymd_opt(2026, 9, 26).unwrap()));
+    }
+
     // ── 悬浮球态不落盘（F6） ──────────────────────
     #[test]
     fn ball_mode_is_stripped_on_save() {

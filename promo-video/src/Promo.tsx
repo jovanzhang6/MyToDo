@@ -100,15 +100,18 @@ const CURSOR_SEGS: Seg[] = [
 const CLICKS = [102, 152, 158, 166, 176, 240, 286, 386, 500, 540];
 
 const cursorPos = (t: number): [number, number] => {
-  if (t <= CURSOR_SEGS[0][0]) return [CURSOR_SEGS[0][1], CURSOR_SEGS[0][2]];
+  /* 段间空隙 = 原地停顿：必须停在上一段终点；若误返回全片终点，光标会瞬移到右上角乱点 */
+  let pos: [number, number] = [CURSOR_SEGS[0][1], CURSOR_SEGS[0][2]];
   for (const s of CURSOR_SEGS) {
-    if (t >= s[0] && t <= s[3]) {
+    if (t < s[0]) break;
+    if (t <= s[3]) {
       const p = interpolate(t, [s[0], s[3]], [0, 1], { ...clamp, easing: easeIO });
-      return [s[1] + (s[4] - s[1]) * p, s[2] + (s[5] - s[2]) * p];
+      pos = [s[1] + (s[4] - s[1]) * p, s[2] + (s[5] - s[2]) * p];
+    } else {
+      pos = [s[4], s[5]];
     }
   }
-  const last = CURSOR_SEGS[CURSOR_SEGS.length - 1];
-  return [last[4], last[5]];
+  return pos;
 };
 
 const Cursor: React.FC<{ f: number }> = ({ f }) => {

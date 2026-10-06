@@ -1,8 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { showTip } from "./addbar";
 
 /** 设置整页：外观滑杆实时预览松手落盘；三个开关即点即生效 */
 export function initSettingsPage(): void {
+  // 关于页版本号：运行时取自 tauri.conf.json，杜绝随版本发布漏改的写死值
+  const aboutVersion = document.getElementById("about-version");
+  if (aboutVersion) {
+    getVersion()
+      .then((v) => (aboutVersion.textContent = `v${v}`))
+      .catch(() => {}); // 无 Tauri 环境（纯浏览器预览）保持占位值
+  }
+
   const slider = document.getElementById("opacity-slider") as HTMLInputElement;
   const value = document.getElementById("opacity-value")!;
 

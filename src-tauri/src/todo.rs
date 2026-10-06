@@ -272,6 +272,8 @@ pub fn expire_now(db: &mut Database, now: NaiveDateTime) -> bool {
     changed
 }
 
+/// 测试便捷构造（生产路径走 add_task_with_time）；非测试构建下无调用者
+#[allow(dead_code)]
 pub fn add_task(
     db: &mut Database,
     today: NaiveDate,

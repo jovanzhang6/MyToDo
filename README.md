@@ -4,7 +4,7 @@
 
 **再好的 TODO，不如一个用得下去的。**
 
-[![本项目由 GLM-5.3-Flash 开发](https://img.shields.io/badge/本项目由-GLM--5.3--Flash_开发-3d8bd4?style=for-the-badge)](https://chatglm.cn)
+[![本项目由 GLM-5.3-Flash 开发](https://img.shields.io/badge/%E6%9C%AC%E9%A1%B9%E7%9B%AE%E7%94%B1-GLM--5.3--Flash_%E5%BC%80%E5%8F%91-3d8bd4?style=for-the-badge)](https://chatglm.cn)
 
 [![CI](https://github.com/jovanzhang6/MyToDo/actions/workflows/ci.yml/badge.svg)](https://github.com/jovanzhang6/MyToDo/actions/workflows/ci.yml)
 [![Release](https://github.com/jovanzhang6/MyToDo/actions/workflows/release.yml/badge.svg)](https://github.com/jovanzhang6/MyToDo/actions/workflows/release.yml)

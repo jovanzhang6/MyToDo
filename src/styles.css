@@ -894,14 +894,13 @@ body.ball-window #view-ball {
   margin-bottom: 4px;
 }
 
-/* 求 Star 入口：平时淡雅悬停变实，卡片内的行动号召 */
+/* 求 Star 入口：独立卡片，按钮淡雅悬停变实 */
 .star-btn {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  margin-top: 8px;
   padding: 8px;
   border: 1px solid rgba(61, 139, 212, 0.35);
   border-radius: 8px;

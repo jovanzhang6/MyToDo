@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> ✨ **本项目由 [GLM-5.3-Flash](https://chatglm.cn) 开发** —— 从 PRD、Rust 引擎、前端、测试到这条宣传片，全流程皆出其手。
+> **本项目由 [GLM-5.3-Flash](https://chatglm.cn) 开发** —— 从 PRD、Rust 引擎、前端、测试到这条宣传片，全流程皆出其手。
 
 <div align="center">
 

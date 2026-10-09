@@ -242,6 +242,29 @@ pub fn start_ball_drag(app: AppHandle) {
     });
 }
 
+/// 球模式 = 球窗当前可见（switch_ball_mode 是窗口切换唯一权威；db.ball_mode 是
+/// 落盘前剥离的临时标记，运行时不维护，不作判据）。
+pub fn is_ball_mode(app: &AppHandle) -> bool {
+    app.get_webview_window("ball")
+        .is_some_and(|b| b.is_visible().unwrap_or(false))
+}
+
+/// 「唤起主窗」统一入口（托盘左键 / 托盘菜单 / 单实例二次启动共用）：
+/// 球模式下就地展开（球收回、主窗在球位显示），否则照常显示聚焦。
+/// 直接 show 主窗会造成主窗与球同屏的双窗 bug。
+pub fn show_main(app: &AppHandle) {
+    if is_ball_mode(app) {
+        switch_ball_mode(app, false);
+        return;
+    }
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+}
+
 /// 悬浮球切换（独立球窗口架构）：收球=主窗隐藏+球窗显示（就地出现）；
 /// 展开=球窗当前位置显示主窗（尺寸取 pre_ball，出屏钳位）。两窗口尺寸终生不变，
 /// 规避同窗口变形与 DWM/阴影/最小尺寸/WebView 重排的全部竞态。

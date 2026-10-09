@@ -111,8 +111,7 @@ pub fn toggle_main(app: &AppHandle) {
     if window.is_visible().unwrap_or(false) {
         let _ = window.hide();
     } else {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
+        // 球模式下主窗天然隐藏，直接 show 会和球同屏——统一走 show_main 就地展开收球
+        crate::window::show_main(app);
     }
 }

@@ -25,13 +25,9 @@ pub fn run() {
     raise_timer_precision();
 
     tauri::Builder::default()
-        // 单实例：二次启动唤起已有主窗，而不是开新进程
+        // 单实例：二次启动唤起已有主窗，而不是开新进程（球模式下就地展开收球，防双窗）
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+            window::show_main(app);
         }))
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,

@@ -30,6 +30,7 @@
 | D28 | **积压提醒从统计页横幅升级为 Windows toast**：Open+未完成+躺 ≥backlog_days 天未动 → 每天至多一条聚合通知（去重字段 `Database.last_backlog_notified_date` serde default）；判定/发送进 notify.rs 纯函数（backlog_decision/send_backlog），挂 30s 轮询与 get_state 双路径（与到期提醒同架构）；遵循 D17 总开关联动；统计页横幅保留 | 业主 2026-10-09 反馈「积压提醒没有用，不会提醒」——原实现只渲染在统计页，不开页永远看不到；「提醒」应为主动通知 | 每天一条的频率可调（改按任务记账则可做到每任务一次）；文案与统计页横幅同一语气 |
 | D29 | **打卡口径维持「当天全部每日任务勾完」**：曾按业主初步意见放宽为「任意一件即算」，当天复核回退——天数少反映的是真实完成情况，不粉饰；「今天还没全勾」仍只从昨天往回宽限（今天没过完，不提前判死） | 业主 2026-10-09 先提放宽、复核后要求改回（「我确实没有打卡完成所有每日任务，导致打卡天数少」）；打卡是承诺不是参与奖 | 口径就是 streaks/count_back 里的 full 谓词一处语义，要再调只动它 |
 | D30 | **晚间打卡提醒**：每天 22:00 后首拍（30s 轮询 + get_state 双路径），当日存在未完成每日任务 → Windows toast 提醒一次，列未完成任务名（至多 3 个）；去重字段 `Database.last_evening_notified_date` serde default；`EVENING_REMINDER_AT` 常量；受 D17 总开关管辖（设置页副文案改为「到期、积压与打卡提醒的总开关」） | 业主 2026-10-09：「每天晚上十点如果当日还有每日任务没完成，那么应该发送一个提醒」 | 22:00 是常量一行可调；每天一次的频率可改 |
+| D31 | **进程自愈看门狗 + 干净退出标记**：正常退出（托盘退出）写 `.clean_exit`、启动时清除；计划任务 `MyToDoWatchdog` 每 5 分钟检查「进程不在 + 无标记」→ 拉起安装版（wscript 包 vbs 免黑框闪烁）；强杀/panic/断电 5 分钟内自愈，主动退出不会被复活。起因：业主反馈「进程经常莫名其妙消失」；取证（WER 存档 + 14 天 Application/System 事件日志 + 可靠性记录）**零崩溃记录**——凶手是外部终止：实锤其一为 agent 历次按名 taskkill（已入 AGENTS.md 禁令），疑似其二为火绒 HIPS 行为拦截（HipsDaemon 在跑、其击杀不留 Windows 日志，待业主查火绒拦截记录并信任 `D:\software\MyToDo\mytodo.exe`） | 业主 2026-10-10：「那你不能看到问题所在吗，继续」 | 停看门狗：`schtasks /Change /TN MyToDoWatchdog /DISABLE`；脚本在 `scripts/watchdog.*` 与安装目录各一份 |
 
 ## 二、数据与架构类
 

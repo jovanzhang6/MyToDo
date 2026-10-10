@@ -16,7 +16,8 @@
 - Rust 侧改动后必须**进程级重启** dev，不依赖热重载。**杀进程只准按路径杀 dev 产物，严禁按进程名 `taskkill //IM mytodo.exe`**——业主安装的正式版与 dev 同名，按名杀会连正式版一起带走（2026-10-10 实锤：业主反馈"进程经常莫名其妙消失"，根因就是历次 dev/打包前的按名强杀）。正确姿势：
   `powershell -NoProfile -Command "Get-Process mytodo -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*src-tauri*' } | Stop-Process -Force"`
   然后清 1420 端口残留 node → `pnpm tauri dev`。打包前同理只杀 dev 产物；需要停正式版必须先问业主。
-- 进程消失排查：先看 `%APPDATA%\com.mytodo.app\mytodo.log`（panic 黑匣子 + 启动标记）与 Windows 事件日志 Application 的 1000/1001/1002。
+- 进程消失排查：先看 `%APPDATA%\com.mytodo.app\mytodo.log`（panic 黑匣子 + 启动/正常退出标记）与 Windows 事件日志 Application 的 1000/1001/1002。
+- **看门狗已部署**（计划任务 `MyToDoWatchdog`，每 5 分钟）：安装版被杀且无 `.clean_exit` 标记时自动拉起。推论：dev 会话结束后 5 分钟内业主的安装版会自己回来，属预期；需要应用保持死亡（如测试）用 `schtasks /Change /TN MyToDoWatchdog /DISABLE` 临时停用。
 - 发版：版本号三处同步（tauri.conf.json / Cargo.toml / package.json）→ tag `v*` → CI 自动构建发布。
 
 <!-- shared-env:begin · 由 ZCode 定时任务自动维护，勿手改本节（项目自有约定写在本节外） · 最近同步 2026-10-10 -->

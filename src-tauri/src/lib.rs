@@ -123,6 +123,12 @@ pub fn run() {
             commands::hide_window,
             commands::open_repo
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_app, event| {
+            // 正常退出（托盘退出/系统关机请求）写干净退出标记；强杀与 panic 到不了这里
+            if let tauri::RunEvent::Exit = event {
+                logging::write_clean_exit_marker();
+            }
+        });
 }

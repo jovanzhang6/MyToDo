@@ -2,7 +2,7 @@
 //! 约定（2026-10-06 时刻粒度改版）：未完成限时任务在到期前 1 小时、15 分钟各提醒一次，
 //! 按任务按段记账（Task.notified_stage）防重发；同一轮询窗口内同段任务聚合为一条 toast。
 
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use serde::Serialize;
 
 use crate::todo::{Database, Kind, Task, due_datetime};
@@ -205,6 +205,87 @@ pub fn send_backlog(
         .body(toast.body)
         .show();
     db.last_backlog_notified_date = Some(today);
+}
+
+/* ── 晚间打卡提醒：每天 22:00 后，当日每日任务没勾完 → 提醒一次 ── */
+
+/// 晚间提醒触发时刻（2026-10-09 业主定为晚上十点）
+pub const EVENING_REMINDER_AT: (u32, u32) = (22, 0);
+
+/// 当日未完成的每日任务：件数 + 名单（列表顺序，至多 3 个）
+#[derive(Debug, PartialEq)]
+pub struct EveningNotice {
+    pub remaining: u32,
+    pub names: Vec<String>,
+}
+
+/// 全库判定：22:00 后首拍且当日还有未完成的每日任务 → 提醒。
+/// 全勾完 / 没有每日任务 / 今天已提醒 / 开关关闭 → None。
+pub fn evening_decision(db: &Database, now: NaiveDateTime) -> Option<EveningNotice> {
+    if !db.reminders_enabled {
+        return None;
+    }
+    if db.last_evening_notified_date == Some(now.date()) {
+        return None;
+    }
+    let at = NaiveTime::from_hms_opt(EVENING_REMINDER_AT.0, EVENING_REMINDER_AT.1, 0).unwrap();
+    if now.time() < at {
+        return None;
+    }
+    let undone: Vec<String> = db
+        .tasks
+        .iter()
+        .filter(|t| t.kind == Kind::Daily && t.done_date.is_none())
+        .map(|t| t.text.clone())
+        .collect();
+    if undone.is_empty() {
+        return None;
+    }
+    Some(EveningNotice {
+        remaining: undone.len() as u32,
+        names: undone.into_iter().take(3).collect(),
+    })
+}
+
+pub fn evening_body(notice: &EveningNotice) -> String {
+    let mut s = format!(
+        "今天还有 {} 件每日任务没完成，打卡别断",
+        notice.remaining
+    );
+    if !notice.names.is_empty() {
+        s.push_str("：");
+        s.push_str(&notice.names.join("、"));
+        if notice.remaining > notice.names.len() as u32 {
+            s.push_str(" 等");
+        }
+    }
+    s.push_str("——打完卡再休息");
+    s
+}
+
+pub fn build_evening_toast(notice: &EveningNotice) -> DueToast {
+    DueToast {
+        title: "MyToDo · 打卡提醒".to_string(),
+        body: evening_body(notice),
+    }
+}
+
+/// 发送 + 记账（幂等由 evening_decision 保证每天只报一次）。
+pub fn send_evening(
+    app: &tauri::AppHandle,
+    db: &mut Database,
+    today: NaiveDate,
+    notice: &EveningNotice,
+) {
+    use tauri_plugin_notification::NotificationExt;
+    let toast = build_evening_toast(notice);
+    let _ = app
+        .notification()
+        .builder()
+        .title(toast.title)
+        .body(toast.body)
+        .show();
+    db.last_evening_notified_date = Some(today);
 }
 
 #[cfg(test)]
@@ -428,6 +509,71 @@ mod tests {
         assert_eq!(
             backlog_body(&notice),
             "4 件不限时任务已躺 7 天——该做掉，或者删掉：一、二、三 等"
+        );
+    }
+
+    /* ── D8 晚间打卡提醒 ────────────────────────── */
+
+    /// 两件每日任务，22:00 时只勾了「背单词」
+    fn evening_db() -> Database {
+        let mut db = new_database();
+        add_task(&mut db, d(2026, 9, 24), "背单词", Kind::Daily, None).unwrap();
+        add_task(&mut db, d(2026, 9, 24), "算法题", Kind::Daily, None).unwrap();
+        let a = db.tasks[0].id.clone();
+        toggle_done(&mut db, d(2026, 9, 26), &a).unwrap();
+        db
+    }
+
+    #[test]
+    fn d8_fires_after_ten_with_undone_names() {
+        let db = evening_db();
+        // 21:59 未到点
+        assert_eq!(evening_decision(&db, dt(26, 21, 59)), None);
+        // 22:00 到点：剩 1 件
+        let notice = evening_decision(&db, dt(26, 22, 0)).expect("22:00 应触发");
+        assert_eq!(notice.remaining, 1);
+        assert_eq!(notice.names, vec!["算法题".to_string()]);
+        assert_eq!(
+            evening_body(&notice),
+            "今天还有 1 件每日任务没完成，打卡别断：算法题——打完卡再休息"
+        );
+    }
+
+    #[test]
+    fn d8_once_per_day_and_silent_when_done() {
+        let mut db = evening_db();
+        db.last_evening_notified_date = Some(d(2026, 9, 26));
+        assert_eq!(evening_decision(&db, dt(26, 23, 0)), None, "同日不重发");
+        assert!(
+            evening_decision(&db, dt(27, 22, 0)).is_some(),
+            "次日重新具备触发条件"
+        );
+
+        // 全勾完 → 静默
+        let mut db2 = evening_db();
+        let b = db2.tasks[1].id.clone();
+        toggle_done(&mut db2, d(2026, 9, 26), &b).unwrap();
+        assert_eq!(evening_decision(&db2, dt(26, 22, 0)), None, "全勾完不打扰");
+
+        // 无每日任务 → 静默
+        let mut db3 = new_database();
+        add_task(&mut db3, d(2026, 9, 24), "不限时", Kind::Open, None).unwrap();
+        assert_eq!(evening_decision(&db3, dt(26, 22, 0)), None);
+    }
+
+    #[test]
+    fn d8_switch_off_and_ellipsis() {
+        let mut db = evening_db();
+        db.reminders_enabled = false;
+        assert_eq!(evening_decision(&db, dt(26, 22, 0)), None, "总开关关闭");
+
+        let notice = EveningNotice {
+            remaining: 4,
+            names: vec!["一".into(), "二".into(), "三".into()],
+        };
+        assert_eq!(
+            evening_body(&notice),
+            "今天还有 4 件每日任务没完成，打卡别断：一、二、三 等——打完卡再休息"
         );
     }
 }

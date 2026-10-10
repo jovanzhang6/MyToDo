@@ -98,10 +98,10 @@ pub fn compute_stats(db: &Database, today: NaiveDate) -> StatsDto {
     }
 }
 
-/// （当前连续，最长纪录）。打卡成功 = 当天完成至少一件每日任务（2026-10-09 业主修订：
-/// 原「全部勾完」太苛，多件每日任务漏一件就断，用户很少见到成功）。
-/// 当前：今天已打卡 → 含今天往回；今天还没勾 → 从昨天往回宽限（今天还没过完）。
-/// 最长：全历史（含今天）里连续打卡的最长一段。
+/// （当前连续，最长纪录）。打卡成功 = 当天全部每日任务勾完（2026-10-09 定稿：
+/// 曾短暂放宽为「任意一件即算」，当天复核回退——天数少反映的是真实完成情况，不粉饰）。
+/// 当前：今天全勾 → 含今天往回；今天没全勾 → 从昨天往回（今天还没过完，不提前判死）。
+/// 最长：全历史（含今天）里连续全勾的最长一段。
 fn streaks(db: &Database, today: NaiveDate) -> (Option<u32>, Option<u32>) {
     let mut by_date: std::collections::HashMap<NaiveDate, (u32, u32)> =
         std::collections::HashMap::new();
@@ -124,8 +124,8 @@ fn streaks(db: &Database, today: NaiveDate) -> (Option<u32>, Option<u32>) {
         }
     };
 
-    // 打卡成功：当天至少勾掉一件每日任务
-    let full = |c: (u32, u32)| c.0 > 0;
+    // 打卡成功：当天的每日任务全部勾完
+    let full = |c: (u32, u32)| c.1 > 0 && c.0 == c.1;
 
     // 当前连续：无每日任务 → None（不是 0）
     let current = today_counts.map(|c| {
@@ -172,7 +172,7 @@ fn count_back(
     by_date: &std::collections::HashMap<NaiveDate, (u32, u32)>,
     start: Option<NaiveDate>,
 ) -> u32 {
-    let full = |c: (u32, u32)| c.0 > 0;
+    let full = |c: (u32, u32)| c.1 > 0 && c.0 == c.1;
     let mut n = 0u32;
     let mut day = start;
     while let Some(d) = day {
@@ -248,7 +248,7 @@ mod tests {
         assert_eq!(s.rate_daily, Some(0.5));
         assert_eq!(s.rate_limited, Some(1.0));
         assert_eq!(s.rate_open, Some(0.0));
-        assert_eq!(s.streak_current, Some(1), "完成 1/2 件每日 → 今天已打卡");
+        assert_eq!(s.streak_current, Some(0), "有每日任务但今天未全勾 → 0");
 
         let mut db2 = new_database();
         add_task(&mut db2, d(2026, 9, 24), "只有不限时", Kind::Open, None).unwrap();
@@ -291,27 +291,28 @@ mod tests {
         assert_eq!(s3.streak_longest, Some(4));
     }
 
-    // ── ④ 打卡口径（2026-10-09 修订）：完成任意一件每日任务即算打卡成功 ──
+    // ── ④ 打卡口径（2026-10-09 回退定稿）：必须全部每日勾完，漏一件不算 ──
     #[test]
-    fn streak_counts_day_with_any_daily_done() {
+    fn streak_requires_all_daily_done() {
         let mut db = new_database();
         let a = add_task(&mut db, d(2026, 9, 20), "背单词", Kind::Daily, None).unwrap();
         let _b = add_task(&mut db, d(2026, 9, 20), "算法题", Kind::Daily, None).unwrap();
-        // 三天都只完成「背单词」一件 → 连续打卡 3 天
+        // 三天都只完成「背单词」一件 → 一天都不算打卡
         for day in [20, 21, 22] {
             toggle_done(&mut db, d(2026, 9, day), &a).unwrap();
             roll_over(&mut db, d(2026, 9, day + 1));
         }
         let s = compute_stats(&db, d(2026, 9, 23));
-        assert_eq!(s.streak_current, Some(3), "每天只勾 1/2 件每日也连续打卡");
-        assert_eq!(s.streak_longest, Some(3));
+        assert_eq!(s.streak_current, Some(0), "每天只勾 1/2 件每日 → 不打卡");
+        assert_eq!(s.streak_longest, Some(0), "从未全勾 → 最长纪录 0");
 
-        // 一件都没勾的天断签
-        roll_over(&mut db, d(2026, 9, 24));
-        check_on(&mut db, d(2026, 9, 24), &a);
-        let s2 = compute_stats(&db, d(2026, 9, 24));
-        assert_eq!(s2.streak_current, Some(1), "23 日一件未勾 → 断签，今日重计");
-        assert_eq!(s2.streak_longest, Some(3), "最长纪录保留");
+        // 今天把两件都勾上 → 立即计 1（从昨天断档重新起算）
+        check_on(&mut db, d(2026, 9, 23), &a);
+        let b_id = db.tasks[1].id.clone();
+        check_on(&mut db, d(2026, 9, 23), &b_id);
+        let s2 = compute_stats(&db, d(2026, 9, 23));
+        assert_eq!(s2.streak_current, Some(1), "今日全勾 → 打卡 1 天");
+        assert_eq!(s2.streak_longest, Some(1));
     }
 
     // ── ③ 按期完成率与积压告警 ──────────────────────

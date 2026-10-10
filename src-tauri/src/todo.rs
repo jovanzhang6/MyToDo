@@ -98,6 +98,9 @@ pub struct Database {
     /// 积压提醒：最近一次发送的自然日（每天至多一条聚合 toast 的去重依据）
     #[serde(default)]
     pub last_backlog_notified_date: Option<NaiveDate>,
+    /// 晚间打卡提醒：最近一次发送的自然日（每天至多一条的去重依据）
+    #[serde(default)]
+    pub last_evening_notified_date: Option<NaiveDate>,
     /// 积压告警阈值（天）：不限时任务未动够 N 天触发告警（设置面板可调 1–30）
     #[serde(default = "default_backlog_days")]
     pub backlog_days: u32,
@@ -122,6 +125,7 @@ pub fn new_database() -> Database {
         pre_ball: None,
         reminders_enabled: true,
         last_backlog_notified_date: None,
+        last_evening_notified_date: None,
         backlog_days: 3,
     }
 }

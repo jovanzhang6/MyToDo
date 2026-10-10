@@ -64,6 +64,10 @@ pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
         crate::notify::send_backlog(&app, &mut db, today, &notice);
         changed = true;
     }
+    if let Some(notice) = crate::notify::evening_decision(&db, now) {
+        crate::notify::send_evening(&app, &mut db, today, &notice);
+        changed = true;
+    }
 
     let dto = StateDto {
         today,
@@ -336,6 +340,11 @@ fn reminder_tick(app: &AppHandle) {
         // 积压提醒：与到期提醒同轮询驱动，每天至多一条
         if let Some(notice) = crate::notify::backlog_decision(&db, now.date()) {
             crate::notify::send_backlog(app, &mut db, now.date(), &notice);
+            changed = true;
+        }
+        // 晚间打卡提醒：22:00 后首拍，当日每日任务没勾完提醒一次
+        if let Some(notice) = crate::notify::evening_decision(&db, now) {
+            crate::notify::send_evening(app, &mut db, now.date(), &notice);
             changed = true;
         }
     }

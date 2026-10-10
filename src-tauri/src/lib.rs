@@ -1,4 +1,5 @@
 mod commands;
+mod logging;
 mod notify;
 mod stats;
 mod store;
@@ -43,9 +44,14 @@ pub fn run() {
                 .expect("无法定位用户数据目录")
                 .join("data.json");
             let db = store::load(&db_path).unwrap_or_else(|e| {
-                eprintln!("{e}；已从空数据库启动");
+                let msg = format!("{e}；已从空数据库启动");
+                logging::log_line(&format!("数据文件损坏：{msg}"));
+                eprintln!("{msg}");
                 todo::new_database()
             });
+            // 黑匣子：stderr 在窗口程序里不可见，进程消失时全靠这份日志
+            logging::init(db_path.with_file_name("mytodo.log"));
+            logging::install_panic_hook();
             app.manage(commands::AppState {
                 db: std::sync::Mutex::new(db),
                 path: db_path,

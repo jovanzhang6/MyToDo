@@ -350,6 +350,7 @@ fn reminder_tick(app: &AppHandle) {
     }
     if changed {
         if let Err(e) = crate::store::save(&state.db.lock().unwrap(), &state.path) {
+            crate::logging::log_line(&format!("提醒轮询落盘失败：{e}"));
             eprintln!("提醒轮询落盘失败：{e}");
         }
         let _ = app.emit("state-changed", ());

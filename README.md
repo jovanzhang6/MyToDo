@@ -69,7 +69,7 @@ pnpm tauri build    # 产出安装包（src-tauri/target/release/bundle/nsis/）
 
 ```bash
 cd src-tauri
-cargo test          # 46 个单元测试：任务生命周期、时刻级过期、跨天等价性、贴边几何、统计口径、到期/积压提醒去重、持久化兼容
+cargo test          # 47 个单元测试：任务生命周期、时刻级过期、跨天等价性、贴边几何、统计口径、到期/积压提醒去重、持久化兼容
 ```
 
 引擎层的所有时间均为注入（`today` 参数），跨天/休眠补偿等边界全部可测。

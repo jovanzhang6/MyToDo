@@ -2,7 +2,7 @@
 //! 约定（2026-10-06 时刻粒度改版）：未完成限时任务在到期前 1 小时、15 分钟各提醒一次，
 //! 按任务按段记账（Task.notified_stage）防重发；同一轮询窗口内同段任务聚合为一条 toast。
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::Serialize;
 
 use crate::todo::{Database, Kind, Task, due_datetime};
@@ -122,10 +122,95 @@ pub fn send_stage(app: &tauri::AppHandle, db: &mut Database, notice: &StageNotic
     }
 }
 
+/* ── 积压提醒：不限时任务躺 ≥backlog_days 天未动，每天至多一条聚合 toast ── */
+
+/// 单日积压待发：件数、最老天数、最积压的前 3 个任务名
+#[derive(Debug, PartialEq)]
+pub struct BacklogNotice {
+    pub count: u32,
+    pub oldest_days: u32,
+    pub names: Vec<String>,
+}
+
+/// 全库判定（口径与 stats 积压告警一致：Open + 未完成 + 躺够阈值天数）。
+/// 返回 None = 今天已发 / 开关关闭 / 无积压。
+pub fn backlog_decision(db: &Database, today: NaiveDate) -> Option<BacklogNotice> {
+    if !db.reminders_enabled {
+        return None;
+    }
+    if db.last_backlog_notified_date == Some(today) {
+        return None;
+    }
+    let mut aged: Vec<(NaiveDate, u32, String)> = db
+        .tasks
+        .iter()
+        .filter(|t| t.kind == Kind::Open && t.done_date.is_none())
+        .map(|t| {
+            (
+                t.created_date,
+                (today - t.created_date).num_days().max(0) as u32,
+                t.text.clone(),
+            )
+        })
+        .filter(|(_, age, _)| *age >= db.backlog_days)
+        .collect();
+    if aged.is_empty() {
+        return None;
+    }
+    aged.sort();
+    let oldest_days = aged.iter().map(|(_, age, _)| *age).max().unwrap_or(0);
+    Some(BacklogNotice {
+        count: aged.len() as u32,
+        oldest_days,
+        names: aged.into_iter().take(3).map(|(_, _, name)| name).collect(),
+    })
+}
+
+/// 通知正文：与统计页积压横幅同一语气。
+pub fn backlog_body(notice: &BacklogNotice) -> String {
+    let mut s = format!(
+        "{} 件不限时任务已躺 {} 天——该做掉，或者删掉",
+        notice.count, notice.oldest_days
+    );
+    if !notice.names.is_empty() {
+        s.push_str("：");
+        s.push_str(&notice.names.join("、"));
+        if notice.count > notice.names.len() as u32 {
+            s.push_str(" 等");
+        }
+    }
+    s
+}
+
+pub fn build_backlog_toast(notice: &BacklogNotice) -> DueToast {
+    DueToast {
+        title: "MyToDo · 积压提醒".to_string(),
+        body: backlog_body(notice),
+    }
+}
+
+/// 发送 + 记账（幂等由 backlog_decision 保证每天只报一次）。
+pub fn send_backlog(
+    app: &tauri::AppHandle,
+    db: &mut Database,
+    today: NaiveDate,
+    notice: &BacklogNotice,
+) {
+    use tauri_plugin_notification::NotificationExt;
+    let toast = build_backlog_toast(notice);
+    let _ = app
+        .notification()
+        .builder()
+        .title(toast.title)
+        .body(toast.body)
+        .show();
+    db.last_backlog_notified_date = Some(today);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::todo::{add_task_with_time, expire_now, new_database, toggle_done};
+    use crate::todo::{add_task, add_task_with_time, expire_now, new_database, toggle_done};
     use chrono::NaiveDate;
 
     fn d(y: i32, m: u32, day: u32) -> NaiveDate {
@@ -275,5 +360,74 @@ mod tests {
                 }
             }
         }
+    }
+
+    /* ── D7 积压提醒 ────────────────────────────── */
+
+    #[test]
+    fn d7_backlog_fires_with_oldest_first_names() {
+        let mut db = new_database();
+        // 两个积压（9/19 创建躺 5 天、9/20 创建躺 4 天）+ 一个年轻（9/23，躺 1 天）
+        add_task(&mut db, d(2026, 9, 19), "旧任务A", Kind::Open, None).unwrap();
+        add_task(&mut db, d(2026, 9, 20), "旧任务B", Kind::Open, None).unwrap();
+        add_task(&mut db, d(2026, 9, 23), "新任务", Kind::Open, None).unwrap();
+        let notice = backlog_decision(&db, d(2026, 9, 24)).expect("躺够 3 天应触发");
+        assert_eq!(notice.count, 2);
+        assert_eq!(notice.oldest_days, 5);
+        assert_eq!(notice.names, vec!["旧任务A".to_string(), "旧任务B".to_string()]);
+        assert_eq!(
+            backlog_body(&notice),
+            "2 件不限时任务已躺 5 天——该做掉，或者删掉：旧任务A、旧任务B"
+        );
+    }
+
+    #[test]
+    fn d7_once_per_day_then_fresh_next_day() {
+        let mut db = new_database();
+        add_task(&mut db, d(2026, 9, 19), "旧任务", Kind::Open, None).unwrap();
+        assert!(backlog_decision(&db, d(2026, 9, 24)).is_some());
+        db.last_backlog_notified_date = Some(d(2026, 9, 24));
+        assert_eq!(backlog_decision(&db, d(2026, 9, 24)), None, "同日不重发");
+        assert!(backlog_decision(&db, d(2026, 9, 25)).is_some(), "次日新的一天可再发");
+    }
+
+    #[test]
+    fn d7_silent_cases() {
+        let mut db = new_database();
+        // 未达阈值
+        add_task(&mut db, d(2026, 9, 23), "年轻任务", Kind::Open, None).unwrap();
+        assert_eq!(backlog_decision(&db, d(2026, 9, 24)), None);
+
+        // 已完成 / 限时类型不计数
+        add_task(&mut db, d(2026, 9, 19), "做完了", Kind::Open, None).unwrap();
+        let done_id = db.tasks[1].id.clone();
+        toggle_done(&mut db, d(2026, 9, 20), &done_id).unwrap();
+        add_task(
+            &mut db,
+            d(2026, 9, 19),
+            "限时的不算积压",
+            Kind::Limited,
+            Some(d(2026, 9, 30)),
+        )
+        .unwrap();
+        assert_eq!(backlog_decision(&db, d(2026, 9, 24)), None, "只剩已完成与限时");
+
+        // 开关关闭
+        add_task(&mut db, d(2026, 9, 19), "很旧的任务", Kind::Open, None).unwrap();
+        db.reminders_enabled = false;
+        assert_eq!(backlog_decision(&db, d(2026, 9, 24)), None, "总开关关闭");
+    }
+
+    #[test]
+    fn d7_body_ellipses_when_many() {
+        let notice = BacklogNotice {
+            count: 4,
+            oldest_days: 7,
+            names: vec!["一".into(), "二".into(), "三".into()],
+        };
+        assert_eq!(
+            backlog_body(&notice),
+            "4 件不限时任务已躺 7 天——该做掉，或者删掉：一、二、三 等"
+        );
     }
 }

@@ -81,7 +81,7 @@ function syncBacklogRow(days: number, remindersOn: boolean): void {
   document.getElementById("backlog-value")!.textContent = String(days);
   (
     document.getElementById("backlog-desc") as HTMLElement
-  ).textContent = `不限时任务躺 ${days} 天未动时在统计页告警`;
+  ).textContent = `不限时任务躺 ${days} 天未动时通知提醒，每天至多一条`;
   document.getElementById("backlog-row")!.classList.toggle("disabled", !remindersOn);
 }
 

@@ -15,3 +15,28 @@
 - 业务逻辑全部下沉 Rust 纯函数（日期注入），前端只做展示；测试 `cargo test`（src-tauri 下）+ `npx tsc --noEmit`。
 - Rust 侧改动后必须**进程级重启** dev（kill mytodo.exe + 清 1420 端口残留 node + `pnpm tauri dev`），不依赖热重载。
 - 发版：版本号三处同步（tauri.conf.json / Cargo.toml / package.json）→ tag `v*` → CI 自动构建发布。
+
+<!-- shared-env:begin · 由 ZCode 定时任务自动维护，勿手改本节（项目自有约定写在本节外） · 最近同步 2026-10-10 -->
+## 公共安装与环境速查（全机共享，定时任务并集同步）
+
+**运行时与包管理**
+- Python 只走 uv：`uv run`、`uv pip`，禁 `python -m pip`；无 pandoc。（唯一例外：`D:\work\.venv` 自带 pip 及 python-docx/python-pptx，用户要求保留）
+- Node v24.18.0（`D:\software\nodejs`）；ffmpeg、git、uv 均在 PATH；pnpm 11 需 Node ≥ 22.13（`node:sqlite`）。
+- Rust：rustup/cargo 1.98.1 stable-msvc（Git Bash 需 `export PATH="$HOME/.cargo/bin:$PATH"`）；cargo 已配 rsproxy.cn 国内镜像（`~/.cargo/config.toml`，本机 crates.io 仅 ~60KB/s，装国外依赖优先国内源）；MSVC 工具链 = VS Build Tools C++ 14.44。
+
+**文档处理**
+- LibreOffice 26.2.2：`D:\software\LibreOffice\program\soffice.exe`（已入 PATH）。`soffice --version` 会挂起；转换用 `soffice --headless --norestore --convert-to pdf`；文档验收链 = docx/pptx → PDF → `uv run --with pymupdf` 渲染 PNG。
+- Word COM（PowerShell）：`New-Object -ComObject Word.Application`，另存 PDF 格式码 17；`antiword -m UTF-8`（Git Bash 自带）提取 .doc 文本；无 poppler/pdftoppm。
+
+**视频与渲染**
+- Remotion 共享浏览器已 setx：环境变量 `REMOTION_BROWSER_EXECUTABLE` → `D:\software\remotion-browser\chrome-headless-shell-win64\chrome-headless-shell.exe`，渲染免下载、免 `--browser-executable`；npm 拦截 esbuild postinstall 导致渲染报错时 `npm rebuild esbuild` 修复。
+- 看视频：ZCode 的 Read 工具可直读 mp4（≤90s 全片 ~1fps 采样，音轨不进）；其他 agent 用 ffmpeg 抽帧（`select=not(mod(n,2))` + `tile=5x5` 网格逐张核对）。
+
+**系统级安装规矩**
+- 装软件尽量放 `D:\software`，少占 C 盘；非提权 shell 装 MSI 用 `msiexec /a TARGETDIR=... /qn` 管理员解包方式（普通 `/qn` 报 1603）；注意：部分工具沙箱会把 msiexec 写入虚拟化（退出码 0 实际没装）。
+- winget 串行：本机同时只能跑一个 winget 安装，并行会静默挂起；Docker（仅本机）拉镜像一律走国内镜像源，Dockerfile 内 apt/pip/npm 同理（服务器不受此限）。
+
+**应用与数据位置**
+- OpenScreen（录屏）：程序 `C:\Users\31185\AppData\Local\Programs\Openscreen\`；数据真身 `D:\software\openscreen-data\`，`C:\Users\31185\AppData\Roaming\openscreen` 是指向它的 junction——清理磁盘别当孤儿目录删。
+- Blender：`D:\software\blender-5.2.2-windows-x64`；自研录屏仓库 Clarity：`D:\study\clarity`。
+<!-- shared-env:end -->

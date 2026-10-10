@@ -54,10 +54,14 @@ pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
     let today = now.date();
     let mut changed = todo::roll_over(&mut db, today);
 
-    // 时刻级过期 + 到期提醒：跨天/唤醒后检查一次；发送与否都随本次落盘（阶段标记防重发）
+    // 时刻级过期 + 到期提醒 + 积压提醒：跨天/唤醒后检查一次；发送与否都随本次落盘
     changed |= todo::expire_now(&mut db, now);
     for notice in crate::notify::reminder_decision(&db, now) {
         crate::notify::send_stage(&app, &mut db, &notice);
+        changed = true;
+    }
+    if let Some(notice) = crate::notify::backlog_decision(&db, today) {
+        crate::notify::send_backlog(&app, &mut db, today, &notice);
         changed = true;
     }
 
@@ -329,6 +333,11 @@ fn reminder_tick(app: &AppHandle) {
             crate::notify::send_stage(app, &mut db, n);
         }
         changed |= !notices.is_empty();
+        // 积压提醒：与到期提醒同轮询驱动，每天至多一条
+        if let Some(notice) = crate::notify::backlog_decision(&db, now.date()) {
+            crate::notify::send_backlog(app, &mut db, now.date(), &notice);
+            changed = true;
+        }
     }
     if changed {
         if let Err(e) = crate::store::save(&state.db.lock().unwrap(), &state.path) {

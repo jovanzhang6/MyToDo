@@ -124,6 +124,16 @@ pub fn toggle_done(app: AppHandle, id: String) -> Result<(), String> {
     let state = app.state::<AppState>();
     let mut db = state.db.lock().unwrap();
     let result = todo::toggle_done(&mut db, today(), &id);
+    // 审计：勾选/取消带任务名与结果落 mytodo.log（「这谁勾的」类疑问的取证依据）
+    if let Ok(()) = result {
+        if let Some(t) = db.tasks.iter().find(|t| t.id == id) {
+            crate::logging::log_line(&format!(
+                "「{}」{}",
+                t.text,
+                if t.done_date.is_some() { "勾选 → 完成" } else { "取消勾选 → 未完成" }
+            ));
+        }
+    }
     let changed = result.is_ok();
     drop(db);
     finalize(&app, &state, changed)?;

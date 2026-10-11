@@ -486,8 +486,9 @@ body.ball-window #app {
   border-radius: 50%;
   background: none;
   border: none;
-  /* 悬浮珠的落影：与主窗同族但更收敛，保证任何壁纸上都有轮廓 */
-  box-shadow: 0 6px 18px rgba(50, 90, 140, 0.35), 0 2px 5px rgba(50, 90, 140, 0.28);
+  /* 禁止在 #app 上画任何东西（含 box-shadow）：它是 56px 方形容器，影子糊进四角
+     就是「悬浮球四个直角」复发的元凶；落影必须画在 #ball 的圆形 alpha 上 */
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -500,7 +501,10 @@ body.ball-window #view-ball {
   justify-content: center;
 }
 
-/* 球面：外圈细进度环（accent 弧 + 浅灰蓝轨道），与统计页进度环同一语言 */
+/* 球面：外圈细进度环（accent 弧 + 浅灰蓝轨道），与统计页进度环同一语言。
+   深度感全部走 inset（box-shadow 内阴影严格裁剪在圆内，四角绝对零绘制）；
+   外抛只留 1px 级贴边微影（外扩 ≈5px ≪ 方窗角区 11.6px）。
+   历史教训：#app 的 box-shadow 与大模糊 drop-shadow 都曾把影子糊进四个直角 */
 #ball {
   width: 100%;
   height: 100%;
@@ -509,6 +513,10 @@ body.ball-window #view-ball {
     var(--accent) var(--p, 0%),
     rgba(120, 150, 180, 0.2) 0
   );
+  box-shadow:
+    inset 0 2px 5px rgba(255, 255, 255, 0.55),
+    inset 0 -3px 7px rgba(50, 90, 140, 0.22);
+  filter: drop-shadow(0 1px 2px rgba(50, 90, 140, 0.3));
   display: flex;
   align-items: center;
   justify-content: center;

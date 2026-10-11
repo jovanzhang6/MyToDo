@@ -484,9 +484,10 @@ body.ball-window #view-settings {
 
 body.ball-window #app {
   border-radius: 50%;
-  background: linear-gradient(160deg, #6aa7dd 0%, #3d7fc0 100%);
+  background: none;
   border: none;
-  box-shadow: none;
+  /* 悬浮珠的落影：与主窗同族但更收敛，保证任何壁纸上都有轮廓 */
+  box-shadow: 0 6px 18px rgba(50, 90, 140, 0.35), 0 2px 5px rgba(50, 90, 140, 0.28);
   overflow: hidden;
 }
 
@@ -499,27 +500,38 @@ body.ball-window #view-ball {
   justify-content: center;
 }
 
-/* 球面：conic 进度环（透明段露出蓝渐变盘面），内芯近实白 */
+/* 球面：外圈细进度环（accent 弧 + 浅灰蓝轨道），与统计页进度环同一语言 */
 #ball {
   width: 100%;
   height: 100%;
   border-radius: 50%;
   background: conic-gradient(
-    rgba(255, 255, 255, 0.92) var(--p, 0%),
-    transparent 0
+    var(--accent) var(--p, 0%),
+    rgba(120, 150, 180, 0.2) 0
   );
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   user-select: none;
+  transition: transform 0.15s ease;
 }
 
+#ball:hover {
+  transform: scale(1.05);
+}
+
+/* 玻璃芯：主窗磨砂质感的微缩版——高光、内晕、发丝白边 */
 #ball-core {
   width: 72%;
   height: 72%;
   border-radius: 50%;
-  background: rgba(21, 48, 78, 0.88);
+  background: linear-gradient(165deg, rgba(246, 251, 255, 0.96) 0%, rgba(219, 236, 250, 0.9) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1px 3px rgba(255, 255, 255, 0.95),
+    inset 0 -3px 8px rgba(61, 139, 212, 0.12),
+    0 1px 2px rgba(40, 80, 130, 0.2);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -528,28 +540,30 @@ body.ball-window #view-ball {
 }
 
 #ball-count {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1;
-  color: #fff;
+  color: var(--ink);
 }
 
 #ball-core small {
-  font-size: 9px;
-  color: rgba(255, 255, 255, 0.75);
+  font-size: 8.5px;
+  color: var(--ink-dim);
   line-height: 1;
+  letter-spacing: 1px;
 }
 
+/* 全部完成：环与数字转绿，玻璃芯染一丝绿意 */
 #ball.ball-done {
-  background: conic-gradient(#58a942 var(--p, 100%), #58a942 0);
+  background: conic-gradient(#58a942 var(--p, 100%), rgba(88, 169, 66, 0.25) 0);
 }
 
 #ball.ball-done #ball-core {
-  background: rgba(18, 60, 26, 0.9);
+  background: linear-gradient(165deg, rgba(244, 252, 244, 0.96) 0%, rgba(222, 242, 224, 0.9) 100%);
 }
 
 #ball.ball-done #ball-count {
-  color: #7ed87e;
+  color: #3f8f2f;
 }
 
 /* ── 统计整页 ────────────────────────────────── */

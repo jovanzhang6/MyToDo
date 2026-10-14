@@ -73,13 +73,22 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.set_always_on_top(checked);
                 }
-                let state = app.state::<AppState>();
+                // 短锁改内存态 + 后台线程落盘：主线程不做文件 IO（AppHangB1 教训）
+                let snapshot;
+                let path;
                 {
+                    let state = app.state::<AppState>();
                     let mut db = state.db.lock().unwrap();
                     let ws = db.window.get_or_insert_with(Default::default);
                     ws.always_on_top = checked;
+                    snapshot = db.clone();
+                    path = state.path.clone();
                 }
-                let _ = crate::store::save(&state.db.lock().unwrap(), &state.path);
+                std::thread::spawn(move || {
+                    if let Err(e) = crate::store::save(&snapshot, &path) {
+                        crate::logging::log_line(&format!("置顶状态落盘失败：{e}"));
+                    }
+                });
             }
             "autostart" => {
                 use tauri_plugin_autostart::ManagerExt;

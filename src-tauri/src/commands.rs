@@ -54,20 +54,12 @@ pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
     let today = now.date();
     let mut changed = todo::roll_over(&mut db, today);
 
-    // 时刻级过期 + 到期提醒 + 积压提醒：跨天/唤醒后检查一次；发送与否都随本次落盘
+    // 时刻级过期 + 三类提醒的「决策」在锁内完成；实际发送一律在锁外（AppHangB1 教训：
+    // 通知 show 是慢系统调用，持锁发送会冻死等锁的主线程）
     changed |= todo::expire_now(&mut db, now);
-    for notice in crate::notify::reminder_decision(&db, now) {
-        crate::notify::send_stage(&app, &mut db, &notice);
-        changed = true;
-    }
-    if let Some(notice) = crate::notify::backlog_decision(&db, today) {
-        crate::notify::send_backlog(&app, &mut db, today, &notice);
-        changed = true;
-    }
-    if let Some(notice) = crate::notify::evening_decision(&db, now) {
-        crate::notify::send_evening(&app, &mut db, today, &notice);
-        changed = true;
-    }
+    let notices = crate::notify::reminder_decision(&db, now);
+    let backlog = crate::notify::backlog_decision(&db, today);
+    let evening = crate::notify::evening_decision(&db, now);
 
     let dto = StateDto {
         today,
@@ -84,6 +76,40 @@ pub fn get_state(app: AppHandle) -> Result<StateDto, String> {
         stats: crate::stats::compute_stats(&db, today),
     };
     drop(db);
+
+    // 锁外发送（带慢调用审计：>300ms 记入 mytodo.log）
+    let mut toasts: Vec<crate::notify::DueToast> = Vec::new();
+    for n in &notices {
+        toasts.push(crate::notify::build_toast(n.stage, &n.names));
+    }
+    if let Some(n) = &backlog {
+        toasts.push(crate::notify::build_backlog_toast(n));
+    }
+    if let Some(n) = &evening {
+        toasts.push(crate::notify::build_evening_toast(n));
+    }
+    for t in &toasts {
+        let ms = crate::notify::show_toast(&app, t);
+        if ms > 300 {
+            crate::logging::log_line(&format!("慢通知（{ms}ms）：{}", t.title));
+        }
+    }
+
+    // 短锁回写记账标记
+    if !toasts.is_empty() {
+        let mut db = state.db.lock().unwrap();
+        for n in &notices {
+            crate::notify::apply_stage_marks(&mut db, n);
+        }
+        if backlog.is_some() {
+            crate::notify::apply_backlog_mark(&mut db, today);
+        }
+        if evening.is_some() {
+            crate::notify::apply_evening_mark(&mut db, today);
+        }
+        changed = true;
+    }
+
     finalize(&app, &state, changed)?;
     Ok(dto)
 }
@@ -324,8 +350,8 @@ pub fn hide_window(app: AppHandle, window: WebviewWindow) -> Result<(), String> 
 }
 
 /// 时分级提醒轮询（30 秒一拍）：窗口隐藏时 WebView2 会节流前端定时器，到期判定必须由
-/// Rust 侧驱动。这里只做「锁库 → 纯函数判定 → 发送 → 落盘 → 广播」的薄壳；与 get_state
-/// 走同一套判定，Task.notified_stage 阶段标记保证两条路径幂等。
+/// Rust 侧驱动。锁内只做决策，系统通知在锁外发（AppHangB1 教训）；与 get_state 走同一套
+/// 判定，Task.notified_stage 阶段标记保证两条路径幂等。
 pub fn start_reminder_loop(app: AppHandle) {
     std::thread::spawn(move || loop {
         std::thread::sleep(std::time::Duration::from_secs(30));
@@ -338,25 +364,47 @@ fn reminder_tick(app: &AppHandle) {
     let now = now();
     let mut changed = false;
     let notices;
+    let backlog;
+    let evening;
     {
         let mut db = state.db.lock().unwrap();
         changed |= todo::roll_over(&mut db, now.date());
         changed |= todo::expire_now(&mut db, now);
         notices = crate::notify::reminder_decision(&db, now);
+        backlog = crate::notify::backlog_decision(&db, now.date());
+        evening = crate::notify::evening_decision(&db, now);
+    }
+
+    // 锁外发送（带慢调用审计）
+    let mut toasts: Vec<crate::notify::DueToast> = Vec::new();
+    for n in &notices {
+        toasts.push(crate::notify::build_toast(n.stage, &n.names));
+    }
+    if let Some(n) = &backlog {
+        toasts.push(crate::notify::build_backlog_toast(n));
+    }
+    if let Some(n) = &evening {
+        toasts.push(crate::notify::build_evening_toast(n));
+    }
+    for t in &toasts {
+        let ms = crate::notify::show_toast(app, t);
+        if ms > 300 {
+            crate::logging::log_line(&format!("慢通知（{ms}ms）：{}", t.title));
+        }
+    }
+
+    {
+        let mut db = state.db.lock().unwrap();
         for n in &notices {
-            crate::notify::send_stage(app, &mut db, n);
+            crate::notify::apply_stage_marks(&mut db, n);
         }
-        changed |= !notices.is_empty();
-        // 积压提醒：与到期提醒同轮询驱动，每天至多一条
-        if let Some(notice) = crate::notify::backlog_decision(&db, now.date()) {
-            crate::notify::send_backlog(app, &mut db, now.date(), &notice);
-            changed = true;
+        if backlog.is_some() {
+            crate::notify::apply_backlog_mark(&mut db, now.date());
         }
-        // 晚间打卡提醒：22:00 后首拍，当日每日任务没勾完提醒一次
-        if let Some(notice) = crate::notify::evening_decision(&db, now) {
-            crate::notify::send_evening(app, &mut db, now.date(), &notice);
-            changed = true;
+        if evening.is_some() {
+            crate::notify::apply_evening_mark(&mut db, now.date());
         }
+        changed |= !toasts.is_empty();
     }
     if changed {
         if let Err(e) = crate::store::save(&state.db.lock().unwrap(), &state.path) {

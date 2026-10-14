@@ -19,7 +19,7 @@ pub fn init(path: PathBuf) {
 /// 干净退出：写标记 + 记日志。异常死亡（强杀/panic/断电）都不会走到这里，
 /// 看门狗看到「进程不在 + 无标记」就会把应用拉起来。
 pub fn write_clean_exit_marker() {
-    if let Some(path) = LOG_PATH.lock().unwrap().as_ref() {
+    if LOG_PATH.lock().unwrap().is_some() {
         let stamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         let _ = std::fs::write(clean_exit_marker(), stamp);
     }

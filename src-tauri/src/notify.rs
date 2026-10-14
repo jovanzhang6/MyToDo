@@ -105,16 +105,22 @@ pub fn build_toast(stage: u8, names: &[String]) -> DueToast {
     }
 }
 
-/// 发送 + 记账：把涉及任务标记到对应段（幂等由 reminder_decision 保证只报未发的段）。
-pub fn send_stage(app: &tauri::AppHandle, db: &mut Database, notice: &StageNotice) {
+/// 发系统通知（**严禁持有任何锁时调用**：show 是系统调用，可能被安全软件/睡眠唤醒
+/// 拖慢数秒，持锁会冻死等锁的主线程——AppHangB1 实锤教训）。返回耗时 ms 供慢调用审计。
+pub fn show_toast(app: &tauri::AppHandle, toast: &DueToast) -> u128 {
     use tauri_plugin_notification::NotificationExt;
-    let toast = build_toast(notice.stage, &notice.names);
+    let t0 = std::time::Instant::now();
     let _ = app
         .notification()
         .builder()
-        .title(toast.title)
-        .body(toast.body)
+        .title(toast.title.clone())
+        .body(toast.body.clone())
         .show();
+    t0.elapsed().as_millis()
+}
+
+/// 发送后的记账：把涉及任务标记到对应段（与 show_toast 分离，短暂持锁完成）。
+pub fn apply_stage_marks(db: &mut Database, notice: &StageNotice) {
     for id in &notice.task_ids {
         if let Some(t) = db.tasks.iter_mut().find(|t| &t.id == id) {
             t.notified_stage = notice.stage;
@@ -189,22 +195,13 @@ pub fn build_backlog_toast(notice: &BacklogNotice) -> DueToast {
     }
 }
 
-/// 发送 + 记账（幂等由 backlog_decision 保证每天只报一次）。
-pub fn send_backlog(
-    app: &tauri::AppHandle,
-    db: &mut Database,
-    today: NaiveDate,
-    notice: &BacklogNotice,
-) {
-    use tauri_plugin_notification::NotificationExt;
-    let toast = build_backlog_toast(notice);
-    let _ = app
-        .notification()
-        .builder()
-        .title(toast.title)
-        .body(toast.body)
-        .show();
+/// 积压/晚间提醒的记账（与 show_toast 分离，短暂持锁完成）。
+pub fn apply_backlog_mark(db: &mut Database, today: NaiveDate) {
     db.last_backlog_notified_date = Some(today);
+}
+
+pub fn apply_evening_mark(db: &mut Database, today: NaiveDate) {
+    db.last_evening_notified_date = Some(today);
 }
 
 /* ── 晚间打卡提醒：每天 22:00 后，当日每日任务没勾完 → 提醒一次 ── */
@@ -268,24 +265,6 @@ pub fn build_evening_toast(notice: &EveningNotice) -> DueToast {
         title: "MyToDo · 打卡提醒".to_string(),
         body: evening_body(notice),
     }
-}
-
-/// 发送 + 记账（幂等由 evening_decision 保证每天只报一次）。
-pub fn send_evening(
-    app: &tauri::AppHandle,
-    db: &mut Database,
-    today: NaiveDate,
-    notice: &EveningNotice,
-) {
-    use tauri_plugin_notification::NotificationExt;
-    let toast = build_evening_toast(notice);
-    let _ = app
-        .notification()
-        .builder()
-        .title(toast.title)
-        .body(toast.body)
-        .show();
-    db.last_evening_notified_date = Some(today);
 }
 
 #[cfg(test)]

@@ -3,3 +3,6 @@ dist/
 src-tauri/target/
 .cargo-test.log
 .tauri-dev.log
+.gemini/memories/
+GEMINI.md
+AGENTS.md

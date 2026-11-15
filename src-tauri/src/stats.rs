@@ -165,7 +165,10 @@ fn streaks(db: &Database, today: NaiveDate) -> (Option<u32>, Option<u32>) {
         (None, _) => None,
         (c, _) => c,
     };
-    (current, Some(longest).filter(|_| !by_date.is_empty()))
+    (
+        current,
+        Some(longest).filter(|_| today_counts.is_some() || !by_date.is_empty()),
+    )
 }
 
 fn count_back(
@@ -313,6 +316,20 @@ mod tests {
         let s2 = compute_stats(&db, d(2026, 9, 23));
         assert_eq!(s2.streak_current, Some(1), "今日全勾 → 打卡 1 天");
         assert_eq!(s2.streak_longest, Some(1));
+    }
+
+    #[test]
+    fn streak_day_one_updates_longest_alongside_current() {
+        let mut db = new_database();
+        let id = add_task(&mut db, d(2026, 9, 24), "首日打卡", Kind::Daily, None).unwrap();
+        let before = compute_stats(&db, d(2026, 9, 24));
+        assert_eq!(before.streak_current, Some(0));
+        assert_eq!(before.streak_longest, Some(0));
+
+        toggle_done(&mut db, d(2026, 9, 24), &id).unwrap();
+        let after = compute_stats(&db, d(2026, 9, 24));
+        assert_eq!(after.streak_current, Some(1));
+        assert_eq!(after.streak_longest, Some(1));
     }
 
     // ── ③ 按期完成率与积压告警 ──────────────────────

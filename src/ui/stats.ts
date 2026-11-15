@@ -25,23 +25,29 @@ export function renderStats(state: StateDto): void {
     ? `${s.streak_longest ?? 0} 天`
     : "—";
 
-  // 热力图（全任务口径；未使用的日子留空格）
+  // 热力图（全任务口径；复用已有格子节点，避免重复创建/销毁 DOM）
   const hm = document.getElementById("heatmap")!;
-  hm.textContent = "";
-  const loggedDays = s.heatmap.filter((d) => d.total > 0).length;
-  for (const day of s.heatmap) {
-    const cell = document.createElement("div");
-    cell.className = "hm-cell";
-    if (day.total === 0) {
-      cell.classList.add("hm-empty");
-    } else {
-      const ratio = day.done / day.total;
-      if (ratio >= 1) cell.classList.add("hm-full");
-      else if (ratio >= 0.5) cell.classList.add("hm-mid");
-      else cell.classList.add("hm-low");
+  if (hm.children.length !== s.heatmap.length) {
+    hm.textContent = "";
+    for (let i = 0; i < s.heatmap.length; i++) {
+      hm.appendChild(document.createElement("div"));
     }
-    cell.title = `${day.date}：${day.done}/${day.total}`;
-    hm.appendChild(cell);
+  }
+  const loggedDays = s.heatmap.filter((d) => d.total > 0).length;
+  for (let i = 0; i < s.heatmap.length; i++) {
+    const day = s.heatmap[i];
+    const cell = hm.children[i] as HTMLDivElement;
+    let level = "hm-empty";
+    if (day.total > 0) {
+      const ratio = day.done / day.total;
+      if (ratio >= 1) level = "hm-full";
+      else if (ratio >= 0.5) level = "hm-mid";
+      else level = "hm-low";
+    }
+    const cls = `hm-cell ${level}`;
+    if (cell.className !== cls) cell.className = cls;
+    const title = `${day.date}：${day.done}/${day.total}`;
+    if (cell.title !== title) cell.title = title;
   }
   document.getElementById("heatmap-note")!.textContent =
     loggedDays === 0

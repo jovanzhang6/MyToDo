@@ -8,10 +8,34 @@ use std::sync::Mutex;
 
 static LOG_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 
+const MAX_LOG_BYTES: u64 = 512 * 1024;
+const KEEP_LOG_BYTES: usize = 128 * 1024;
+
+/// 日志超限时保留尾部最新记录（按行边界截断），防止长年运行无限增长。
+fn trim_oversized_log(path: &std::path::Path) {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return;
+    };
+    if meta.len() <= MAX_LOG_BYTES {
+        return;
+    }
+    let Ok(bytes) = std::fs::read(path) else {
+        return;
+    };
+    let start = bytes.len().saturating_sub(KEEP_LOG_BYTES);
+    let aligned = bytes[start..]
+        .iter()
+        .position(|&b| b == b'\n')
+        .map(|i| start + i + 1)
+        .unwrap_or(start);
+    let _ = std::fs::write(path, &bytes[aligned..]);
+}
+
 /// 初始化日志路径并写下启动标记（Data 目录与 data.json 同层）；同时清除干净退出标记
 /// （标记只在「用户主动退出」后存在，看门狗据此决定是否拉起）。
 pub fn init(path: PathBuf) {
-    *LOG_PATH.lock().unwrap() = Some(path);
+    trim_oversized_log(&path);
+    *LOG_PATH.lock().unwrap_or_else(|e| e.into_inner()) = Some(path);
     log_line("── 应用启动 ──");
     let _ = std::fs::remove_file(clean_exit_marker());
 }
@@ -19,7 +43,7 @@ pub fn init(path: PathBuf) {
 /// 干净退出：写标记 + 记日志。异常死亡（强杀/panic/断电）都不会走到这里，
 /// 看门狗看到「进程不在 + 无标记」就会把应用拉起来。
 pub fn write_clean_exit_marker() {
-    if LOG_PATH.lock().unwrap().is_some() {
+    if LOG_PATH.lock().unwrap_or_else(|e| e.into_inner()).is_some() {
         let stamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         let _ = std::fs::write(clean_exit_marker(), stamp);
     }
@@ -29,7 +53,7 @@ pub fn write_clean_exit_marker() {
 fn clean_exit_marker() -> PathBuf {
     LOG_PATH
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .as_ref()
         .map(|p| p.with_file_name(".clean_exit"))
         .unwrap_or_default()
@@ -38,7 +62,7 @@ fn clean_exit_marker() -> PathBuf {
 /// 追加一行带时间戳的日志；写失败静默（日志永远不能反过来伤害应用）。
 pub fn log_line(msg: &str) {
     let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
-    if let Some(path) = LOG_PATH.lock().unwrap().as_ref() {
+    if let Some(path) = LOG_PATH.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
         if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(path) {
             let _ = writeln!(f, "[{ts}] {msg}");
         }

@@ -354,11 +354,16 @@ pub fn set_kind(
         if due.is_none() {
             return Err(EngineError::DueDateRequired);
         }
+        // 只要类型或到期时刻变化就清零提醒记账，防止改期后永远不再提醒
+        if task.kind != Kind::Limited || task.due_date != due || task.due_time != due_time {
+            task.notified_stage = 0;
+        }
         task.due_date = due;
         task.due_time = due_time;
     } else {
         task.due_date = None;
         task.due_time = None;
+        task.notified_stage = 0;
     }
     task.kind = kind;
     Ok(())
@@ -606,7 +611,7 @@ mod tests {
 
         // 跨天完成：先完成的排前面
         let mut db2 = new_database();
-        let a = add_task(&mut db2, base(), "先完成", Kind::Open, None).unwrap();
+        let _a = add_task(&mut db2, base(), "先完成", Kind::Open, None).unwrap();
         let b = add_task(&mut db2, base(), "后完成", Kind::Open, None).unwrap();
         toggle_done(&mut db2, base(), &b).unwrap();
         roll_over(&mut db2, base().succ_opt().unwrap());
@@ -836,5 +841,33 @@ mod tests {
             .unwrap();
         assert_eq!(db.tasks[0].due_date, None, "非限时清日期");
         assert_eq!(db.tasks[0].due_time, None, "非限时清时刻");
+    }
+
+    #[test]
+    fn b11_set_kind_resets_notified_stage_when_schedule_changes() {
+        let mut db = new_database();
+        let id = add_task_with_time(
+            &mut db,
+            base(),
+            "改期提醒",
+            Kind::Limited,
+            Some(d(2026, 9, 26)),
+            Some(tm(17, 0)),
+        )
+        .unwrap();
+        db.tasks[0].notified_stage = 2;
+
+        // 仅确认同一到期日+时刻时保留已提醒阶段，避免重复弹窗
+        set_kind(&mut db, &id, Kind::Limited, Some(d(2026, 9, 26)), Some(tm(17, 0))).unwrap();
+        assert_eq!(db.tasks[0].notified_stage, 2);
+
+        // 推迟时刻 → 重置阶段，确保新到期前仍能提醒
+        set_kind(&mut db, &id, Kind::Limited, Some(d(2026, 9, 27)), Some(tm(17, 0))).unwrap();
+        assert_eq!(db.tasks[0].notified_stage, 0);
+
+        // 转非限时同样清零
+        db.tasks[0].notified_stage = 1;
+        set_kind(&mut db, &id, Kind::Open, None, None).unwrap();
+        assert_eq!(db.tasks[0].notified_stage, 0);
     }
 }

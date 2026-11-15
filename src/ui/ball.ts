@@ -1,13 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { StateDto } from "../main";
 import { showTip } from "./addbar";
+
+export interface BallSummaryDto {
+  today_done: number;
+  today_total: number;
+}
 
 const cur = getCurrentWindow();
 /** 本窗口是否为悬浮球窗（主窗 label=main，球窗 label=ball） */
 export const IS_BALL_WINDOW = cur.label === "ball";
 
-/** 悬浮球：主窗的收球按钮 + 球窗的拖动/点击展开 + 双窗共用的球面渲染 */
+/** 悬浮球：主窗的收球按钮 + 球窗的拖动/点击展开 + 轻量球面渲染 */
 export function initBall(): void {
   if (IS_BALL_WINDOW) {
     document.body.classList.add("ball-window");
@@ -36,10 +40,10 @@ export function initBall(): void {
   });
 }
 
-/** refresh 回流：球窗渲染球面；主窗无需处理（收球时主窗整体隐藏） */
-export function renderBall(state: StateDto): void {
+/** 球窗仅需今日完成/总数即可更新弧度与数字 */
+export function renderBall(summary: BallSummaryDto): void {
   if (!IS_BALL_WINDOW) return;
-  const { today_done, today_total } = state.stats;
+  const { today_done, today_total } = summary;
   const undone = today_total - today_done;
   const pct = today_total === 0 ? 0 : Math.round((today_done / today_total) * 100);
   const ball = document.getElementById("ball")!;

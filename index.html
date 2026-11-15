@@ -46,7 +46,6 @@
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.8l4.6 4.4L19.5 7.2"/></svg>
             </button>
           </div>
-          <div id="tip"></div>
         </footer>
       </div>
 
@@ -142,15 +141,7 @@
           </section>
         </div>
       </div>
-      <div id="stats-panel" class="stats-panel" hidden>
-        <div class="stat-hero"><span id="stat-today">0 / 0</span><small>今日完成</small></div>
-        <div class="stat-row"><span>每日任务</span><b id="stat-daily">—</b></div>
-        <div class="stat-row"><span>限时任务</span><b id="stat-limited">—</b></div>
-        <div class="stat-row"><span>不限时任务</span><b id="stat-open">—</b></div>
-        <div class="stat-row"><span>连续打卡</span><b id="stat-streak">—</b></div>
-        <div class="stat-row"><span>累计归档</span><b id="stat-archive">0</b></div>
-        <div id="stat-trend"></div>
-      </div>
+      <div id="tip" role="status" aria-live="polite"></div>
       <div id="view-ball" class="view" hidden>
         <div id="ball">
           <div id="ball-core">

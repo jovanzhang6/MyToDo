@@ -14,9 +14,12 @@ export function initTitlebar(win: Window): void {
   btnPin = document.getElementById("btn-pin") as HTMLButtonElement;
   btnPin.addEventListener("click", () => {
     const next = !btnPin.classList.contains("active");
-    invoke("set_always_on_top", { on: next }).catch((e) => showTip(String(e)));
-    // 状态以 refresh 回流为准；这里先即时反馈
+    // 先即时反馈；若命令失败则回滚视觉状态并弹 toast
     setPin(next);
+    invoke("set_always_on_top", { on: next }).catch((e) => {
+      setPin(!next);
+      showTip(String(e));
+    });
   });
 
   document.getElementById("btn-close")!.addEventListener("click", () => {

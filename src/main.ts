@@ -2,11 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { initTitlebar, setPin } from "./ui/titlebar";
-import { renderList } from "./ui/list";
-import { initAddbar } from "./ui/addbar";
+import { renderList, updateDueBadges } from "./ui/list";
+import { initAddbar, showTip, syncAddbarDate } from "./ui/addbar";
 import { renderStats } from "./ui/stats";
-import { initSettingsPage, renderSettings } from "./ui/settings";
-import { initBall, renderBall } from "./ui/ball";
+import { applyGlassOpacity, initSettingsPage, renderSettings } from "./ui/settings";
+import { type BallSummaryDto, initBall, IS_BALL_WINDOW, renderBall } from "./ui/ball";
+import { currentView, onViewChange } from "./ui/views";
 
 export interface TaskView {
   id: string;
@@ -45,8 +46,6 @@ export interface StateDto {
   stats: StatsDto;
 }
 
-export type Refresh = () => Promise<void>;
-
 const cur = getCurrentWindow();
 type RzDir = Parameters<typeof cur.startResizeDragging>[0];
 
@@ -60,16 +59,11 @@ function renderTitleDate(today: string): void {
   if (el) el.textContent = `${m}月${d}日 ${weekday}`;
 }
 
-// 黑匣子：任何前端错误实时打进 Rust 日志（.tauri-dev.log），同时在窗口 tip 里可见。
-// 带时间戳（区分新旧错误）且 6 秒自动清空（避免残影被当成新错误）。
-let tipTimer: number | undefined;
+// 黑匣子：任何前端错误实时打进 Rust 日志，同时在窗口共享 tip 里可见（6 秒自动清空）。
 function reportError(msg: string): void {
-  const tip = document.getElementById("tip");
-  if (tip) {
+  if (!IS_BALL_WINDOW) {
     const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
-    tip.textContent = `${time} ${msg}`;
-    clearTimeout(tipTimer);
-    tipTimer = window.setTimeout(() => (tip.textContent = ""), 6000);
+    showTip(`${time} ${msg}`, 6000);
   }
   invoke("log_frontend", { msg }).catch(() => {});
 }
@@ -81,18 +75,60 @@ window.addEventListener("unhandledrejection", (e) =>
 );
 
 let state: StateDto | null = null;
+let refreshInFlight = false;
+let refreshQueued = false;
 
+/** 单飞合并刷新：并发到达的状态事件合并到尾随一次，杜绝乱序回流覆盖 */
 export async function refresh(): Promise<void> {
+  if (refreshInFlight) {
+    refreshQueued = true;
+    return;
+  }
+  refreshInFlight = true;
   try {
-    state = await invoke<StateDto>("get_state");
-    renderList(document.getElementById("list")!, state, refresh);
-    setPin(state.always_on_top);
-    renderStats(state);
-    renderSettings(state);
-    renderBall(state);
-    renderTitleDate(state.today);
+    do {
+      refreshQueued = false;
+      const next = await invoke<StateDto>("get_state");
+      state = next;
+      applyState(next);
+    } while (refreshQueued);
   } catch (e) {
     console.error("get_state 失败", e);
+  } finally {
+    refreshInFlight = false;
+  }
+}
+
+function applyState(s: StateDto): void {
+  renderList(document.getElementById("list")!, s);
+  setPin(s.always_on_top);
+  applyGlassOpacity(s.glass_opacity);
+  syncAddbarDate(s.today);
+  renderTitleDate(s.today);
+  const view = currentView();
+  if (view === "stats") renderStats(s);
+  else if (view === "settings") renderSettings(s);
+}
+
+let ballInFlight = false;
+let ballQueued = false;
+
+async function refreshBall(): Promise<void> {
+  if (ballInFlight) {
+    ballQueued = true;
+    return;
+  }
+  ballInFlight = true;
+  try {
+    do {
+      ballQueued = false;
+      const summary = await invoke<BallSummaryDto>("get_ball_summary");
+      renderBall(summary);
+    } while (ballQueued);
+  } catch (e) {
+    console.error("get_ball_summary 失败", e);
+  } finally {
+    ballInFlight = false;
   }
 }
 
@@ -117,6 +153,17 @@ function initMidnightWatcher(): void {
   }, 30_000);
 }
 
+/** 清单可见且存在未完成限时任务时，每 15 秒轻量更新徽标脉动，仅在越过到期线时才回拉后端归档 */
+function initDueBadgeWatcher(): void {
+  setInterval(() => {
+    if (!state || currentView() !== "list") return;
+    if (!state.tasks.some((t) => t.kind === "limited" && !t.done)) return;
+    if (updateDueBadges(state.today)) {
+      refresh();
+    }
+  }, 15_000);
+}
+
 /** 本地时区 YYYY-MM-DD（不用 toISOString，它按 UTC 会提前切日） */
 export function localToday(): string {
   const d = new Date();
@@ -125,12 +172,25 @@ export function localToday(): string {
 }
 
 async function init(): Promise<void> {
+  if (IS_BALL_WINDOW) {
+    initBall();
+    await listen("state-changed", refreshBall);
+    await refreshBall();
+    return;
+  }
+
   initResizeStrips();
   initMidnightWatcher();
+  initDueBadgeWatcher();
   initTitlebar(cur);
-  initAddbar(refresh);
+  initAddbar();
   initSettingsPage();
   initBall();
+  onViewChange((v) => {
+    if (!state) return;
+    if (v === "stats") renderStats(state);
+    else if (v === "settings") renderSettings(state);
+  });
   await listen("state-changed", refresh);
   window.addEventListener("focus", refresh);
   await refresh();

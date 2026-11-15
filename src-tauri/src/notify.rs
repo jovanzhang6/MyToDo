@@ -26,10 +26,10 @@ pub fn reminder_stage(t: &Task, now: NaiveDateTime) -> Option<u8> {
         return None;
     }
     let due = due_datetime(t)?;
-    let minutes_left = (due - now).num_minutes();
-    if minutes_left <= 0 {
+    if due <= now {
         return None; // 已到期：交给 expire_now 归档，不发提醒
     }
+    let minutes_left = (due - now).num_minutes();
     let crossed = if minutes_left <= 15 {
         STAGE_T15
     } else if minutes_left <= 60 {
@@ -356,6 +356,12 @@ mod tests {
         assert!(expire_now(&mut db3, dt(26, 17, 0)), "到期时刻即归档");
         assert_eq!(reminder_decision(&db3, dt(26, 17, 1)), Vec::new(), "已到期不提醒");
         assert!(db3.tasks.is_empty());
+
+        // 剩 30 秒（<1 分钟，未到期）仍应命中 15 分钟段，不被 num_minutes() 截断为 0 而漏发
+        let db4 = due_db();
+        let sub_minute = d(2026, 9, 26).and_hms_opt(16, 59, 30).unwrap();
+        assert_eq!(reminder_decision(&db4, sub_minute).len(), 1);
+        assert_eq!(reminder_decision(&db4, sub_minute)[0].stage, STAGE_T15);
     }
 
     // ── D5：旧天粒度任务按 23:59 到期，白天不触发 ─────

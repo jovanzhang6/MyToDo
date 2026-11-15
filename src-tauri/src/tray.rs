@@ -2,7 +2,7 @@
 
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, Wry};
+use tauri::{AppHandle, Emitter, Manager, Wry};
 
 use crate::commands::AppState;
 
@@ -73,36 +73,41 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.set_always_on_top(checked);
                 }
-                // 短锁改内存态 + 后台线程落盘：主线程不做文件 IO（AppHangB1 教训）
-                let snapshot;
-                let path;
+                // 短锁改内存态 + 后台串行落盘 + 广播前端：主线程不做文件 IO（AppHangB1 教训）
                 {
                     let state = app.state::<AppState>();
-                    let mut db = state.db.lock().unwrap();
+                    let mut db = state.db.lock().unwrap_or_else(|e| e.into_inner());
                     let ws = db.window.get_or_insert_with(Default::default);
                     ws.always_on_top = checked;
-                    snapshot = db.clone();
-                    path = state.path.clone();
                 }
+                let _ = app.emit("state-changed", ());
+                let app2 = app.clone();
                 std::thread::spawn(move || {
-                    if let Err(e) = crate::store::save(&snapshot, &path) {
+                    let state = app2.state::<AppState>();
+                    if let Err(e) = crate::store::save_latest(&state.db, &state.path) {
                         crate::logging::log_line(&format!("置顶状态落盘失败：{e}"));
                     }
                 });
             }
             "autostart" => {
                 use tauri_plugin_autostart::ManagerExt;
-                let checked = app
-                    .state::<TrayHandles>()
-                    .autostart
-                    .is_checked()
-                    .unwrap_or(false);
+                let item = &app.state::<TrayHandles>().autostart;
+                let checked = item.is_checked().unwrap_or(false);
                 let launcher = app.autolaunch();
-                let _ = if checked {
+                let res = if checked {
                     launcher.enable()
                 } else {
                     launcher.disable()
                 };
+                match res {
+                    Ok(()) => {
+                        let _ = app.emit("state-changed", ());
+                    }
+                    Err(e) => {
+                        let _ = item.set_checked(!checked);
+                        crate::logging::log_line(&format!("托盘切换开机自启失败：{e}"));
+                    }
+                }
             }
             _ => {}
         })

@@ -1,23 +1,40 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Refresh } from "../main";
 import { localToday } from "../main";
 
 let tipTimer: number | undefined;
+let lastDefaultToday = localToday();
 
-export function showTip(message: string): void {
-  const tip = document.getElementById("tip")!;
+export function showTip(message: string, durationMs = 2600): void {
+  const tip = document.getElementById("tip");
+  if (!tip) return;
   tip.textContent = message;
   clearTimeout(tipTimer);
-  tipTimer = window.setTimeout(() => (tip.textContent = ""), 2600);
+  tipTimer = window.setTimeout(() => {
+    tip.textContent = "";
+  }, durationMs);
+}
+
+/** 跨午夜或刷新时更新未手动改过的默认到期日，防止次日仍停留在昨天 */
+export function syncAddbarDate(today: string): void {
+  const dueDate = document.getElementById("due-date") as HTMLInputElement | null;
+  if (!dueDate) {
+    lastDefaultToday = today;
+    return;
+  }
+  if (!dueDate.value || dueDate.value === lastDefaultToday || dueDate.value < today) {
+    dueDate.value = today;
+  }
+  lastDefaultToday = today;
 }
 
 /** 添加条：类型三选（默认不限时）、限时截止日期+时刻（含 +1时/+1天 快捷）、回车添加 */
-export function initAddbar(refresh: Refresh): void {
+export function initAddbar(): void {
   const input = document.getElementById("new-task") as HTMLInputElement;
   const dueWrap = document.getElementById("due-wrap")!;
   const dueDate = document.getElementById("due-date") as HTMLInputElement;
   const dueTime = document.getElementById("due-time") as HTMLInputElement;
-  dueDate.value = localToday();
+  lastDefaultToday = localToday();
+  dueDate.value = lastDefaultToday;
   dueTime.value = "23:59";
 
   const kind = (): "daily" | "limited" | "open" =>
@@ -42,8 +59,14 @@ export function initAddbar(refresh: Refresh): void {
   // 截止日期组只在「限时」选中时展示（初始化即同步，防初始状态漏藏）
   const syncDueWrap = () => {
     dueWrap.hidden = kind() !== "limited";
-    if (!dueWrap.hidden && !dueDate.value) dueDate.value = localToday();
-    if (!dueWrap.hidden && !dueTime.value) dueTime.value = "23:59";
+    if (!dueWrap.hidden) {
+      const today = localToday();
+      if (!dueDate.value || dueDate.value < today) {
+        dueDate.value = today;
+        lastDefaultToday = today;
+      }
+      if (!dueTime.value) dueTime.value = "23:59";
+    }
   };
   syncDueWrap();
 
@@ -64,13 +87,13 @@ export function initAddbar(refresh: Refresh): void {
     invoke("add_task", { text, kind: k, dueDate: due, dueTime: dueT })
       .then(() => {
         input.value = "";
-        refresh();
       })
       .catch((e) => showTip(String(e)));
   };
 
   document.getElementById("btn-add")!.addEventListener("click", add);
   input.addEventListener("keydown", (e) => {
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.key === "Enter") add();
   });
 }
@@ -89,6 +112,7 @@ function shiftHour(hours: number): void {
 function shiftDue(days: number): void {
   const el = document.getElementById("due-date") as HTMLInputElement;
   const base = el.value ? new Date(el.value + "T00:00:00") : new Date();
+  if (isNaN(base.getTime())) return;
   base.setDate(base.getDate() + days);
   const p = (n: number) => String(n).padStart(2, "0");
   el.value = `${base.getFullYear()}-${p(base.getMonth() + 1)}-${p(base.getDate())}`;

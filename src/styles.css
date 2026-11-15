@@ -39,7 +39,6 @@ body {
   background: var(--glass);
   border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: var(--radius);
-  box-shadow: 0 8px 32px rgba(80, 120, 180, 0.25);
   overflow: hidden;
 }
 
@@ -72,8 +71,8 @@ body {
   line-height: 1;
 }
 
-/* 自研即时悬浮提示（原生 title 太慢且不明显） */
-.tb-btn::after {
+/* 自研即时悬浮提示（原生 title 太慢且不明显；仅带 data-tip 的按钮渲染） */
+.tb-btn[data-tip]::after {
   content: attr(data-tip);
   position: absolute;
   top: 32px;
@@ -91,7 +90,7 @@ body {
   z-index: 200;
 }
 
-.tb-btn:hover::after {
+.tb-btn[data-tip]:hover::after {
   opacity: 1;
 }
 
@@ -376,18 +375,29 @@ body {
   color: var(--ink);
 }
 
-/* 限时任务 <15 分钟到期：红色徽章极轻呼吸（无位移无缩放） */
+.kind-pop .pop-due {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kind-pop .pop-due[hidden] {
+  display: none !important;
+}
+
+/* 限时任务 <15 分钟到期：红色徽章轻量透明脉动（走合成器 opacity，避免每帧重绘） */
 .badge.limited.due-today.due-now {
+  will-change: opacity;
   animation: due-pulse 2.4s ease-in-out infinite;
 }
 
 @keyframes due-pulse {
   0%,
   100% {
-    background: rgba(212, 72, 61, 0.16);
+    opacity: 1;
   }
   50% {
-    background: rgba(212, 72, 61, 0.36);
+    opacity: 0.62;
   }
 }
 
@@ -454,10 +464,24 @@ body {
 }
 
 #tip {
-  margin-top: 5px;
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+  z-index: 210;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(212, 72, 61, 0.32);
+  background: rgba(255, 245, 244, 0.96);
   font-size: 12px;
+  line-height: 1.4;
   color: var(--danger);
-  min-height: 15px;
+  pointer-events: none;
+}
+
+#tip:empty,
+body.ball-window #tip {
+  display: none !important;
 }
 
 /* ── 视图切换（清单 / 统计 / 设置 / 悬浮球） ───── */
@@ -949,17 +973,6 @@ body.ball-window #view-ball {
 
 #btn-add svg {
   color: #fff;
-}
-
-.settings-pop input[type="range"] {
-  flex: 1;
-  accent-color: var(--accent);
-}
-
-.settings-pop .opacity-value {
-  width: 34px;
-  text-align: right;
-  color: var(--ink);
 }
 
 /* ── 缩放热区（贴边 6px，带对应光标） ───────────── */

@@ -11,20 +11,8 @@ use tauri::Manager;
 
 use crate::commands::AppState;
 
-/// 提升系统时钟精度到 1ms：收球/拖拽动画的 8ms 节拍依赖它（默认 15.6ms 会造成动画抖动）
-#[cfg(target_os = "windows")]
-fn raise_timer_precision() {
-    use windows::Win32::Media::timeBeginPeriod;
-    unsafe {
-        timeBeginPeriod(1);
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    #[cfg(target_os = "windows")]
-    raise_timer_precision();
-
     tauri::Builder::default()
         // 单实例：二次启动唤起已有主窗，而不是开新进程（球模式下就地展开收球，防双窗）
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -84,7 +72,7 @@ pub fn run() {
                 WebviewUrl::App("index.html?view=ball".into()),
             )
             .title("MyToDo")
-            .inner_size(56.0, 56.0)
+            .inner_size(window::BALL_SIZE as f64, window::BALL_SIZE as f64)
             .decorations(false)
             .transparent(true)
             .resizable(false)
@@ -105,6 +93,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
+            commands::get_ball_summary,
             commands::add_task,
             commands::toggle_done,
             commands::set_kind,

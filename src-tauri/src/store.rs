@@ -3,8 +3,12 @@
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::sync::Mutex;
 
 use crate::todo::Database;
+
+/// 串行化同路径 `.tmp` 写入，防止后台线程（托盘置顶/几何防抖）与前台命令竞态覆盖。
+static SAVE_MUTEX: Mutex<()> = Mutex::new(());
 
 pub fn load(path: &Path) -> io::Result<Database> {
     match fs::read_to_string(path) {
@@ -28,7 +32,23 @@ pub fn load(path: &Path) -> io::Result<Database> {
     }
 }
 
+/// 持写锁后短锁克隆最新 Database 并原子落盘，避免写盘阻塞 `db` 锁及旧快照覆盖新状态。
+pub fn save_latest(db_mutex: &Mutex<Database>, path: &Path) -> io::Result<()> {
+    let _guard = SAVE_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    let snapshot = {
+        let db = db_mutex.lock().unwrap_or_else(|e| e.into_inner());
+        db.clone()
+    };
+    write_atomic(&snapshot, path)
+}
+
+#[cfg(test)]
 pub fn save(db: &Database, path: &Path) -> io::Result<()> {
+    let _guard = SAVE_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    write_atomic(db, path)
+}
+
+fn write_atomic(db: &Database, path: &Path) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
